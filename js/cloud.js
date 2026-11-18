@@ -18,7 +18,8 @@ export function boardHasLayout(config) {
 export function jwtExpiry(token) {
   try {
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const json = JSON.parse(atob(payload));
+    const padded = payload + '='.repeat((4 - (payload.length % 4)) % 4);
+    const json = JSON.parse(atob(padded));
     return Number(json.exp) * 1000;
   } catch {
     return 0;
