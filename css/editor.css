@@ -249,6 +249,57 @@ button:disabled { opacity: 0.45; cursor: default; }
   color: var(--gold-ink);
 }
 
+.signin, .who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 16px;
+  padding: 12px 14px;
+  background: #fffaf3;
+  border: 1px solid #c4b49a;
+}
+
+.signin h2 {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 560;
+}
+
+.signin p, .who span { margin: 0; font-size: 16px; line-height: 1.4; }
+
+.signin-actions, .who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.signin-actions .btn, .who .btn { min-height: 44px; }
+
+.signin label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 16px;
+}
+
+.signin input {
+  min-height: 44px;
+  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid #c4b49a;
+  background: #fff;
+}
+
+#email-code { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; width: 100%; }
+#email-code[hidden], #code-row[hidden], .signin[hidden], .who[hidden] { display: none !important; }
+#code-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+
+.auth-message { width: 100%; color: var(--burgundy); }
+
 .board-frame {
   flex: 1;
   min-height: 0;
@@ -461,6 +512,9 @@ button:disabled { opacity: 0.45; cursor: default; }
   .board-frame { display: block; height: auto; }
   .segment button, .tab, .mobile-only { min-height: 44px; font-size: 16px; }
   .status { margin-left: 0; width: 100%; }
+  .signin, .who { margin: 8px 12px; flex-direction: column; align-items: stretch; }
+  .signin-actions, .who { align-items: stretch; }
+  .signin-actions .btn, .who .btn, .signin input { width: 100%; }
 
   .palette {
     position: fixed;

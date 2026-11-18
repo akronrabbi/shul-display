@@ -1,4 +1,5 @@
 import { createCalendar } from './calendar.js';
+import { authReady, currentUser, editorToken, sendEmailCode, signInWithCode, signInWithGoogle, signOut } from './auth.js';
 import { blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
@@ -12,7 +13,7 @@ import {
   toneChoices,
 } from './widgets.js';
 
-const storage = createStorage();
+const storage = createStorage({ getToken: editorToken });
 const calendar = createCalendar(globalThis.hebcal);
 const canvas = document.getElementById('canvas');
 const palette = document.getElementById('palette');
@@ -66,7 +67,7 @@ function dirty() {
 
 function markDirty() {
   if (dirty()) status.textContent = 'Not saved yet';
-  else if (!hasLocal) status.textContent = 'Published layout. Press Save to keep a copy on this computer.';
+  else if (!hasLocal) status.textContent = 'Published layout. Press Save to put it online.';
   else status.textContent = 'All changes are saved';
 }
 
@@ -458,8 +459,10 @@ function buildInspector() {
     inspector.append(field('Name', textInput(settings.name, (value) => { settings.name = value; })));
     inspector.append(field('Line under the name', textInput(settings.subtitle, (value) => { settings.subtitle = value; })));
     inspector.append(fileButton('Upload a picture', 'image/*', async (file) => {
-      const asset = await storage.putAsset(file);
-      settings.assetId = asset.id;
+      const uploaded = await storeFile(file);
+      if (!uploaded) return;
+      settings.url = uploaded.url;
+      settings.assetId = null;
       markDirty();
       refreshWidget(widget.id);
       buildInspector();
@@ -624,8 +627,9 @@ function buildPhotosForm(settings) {
   upload.multiple = true;
   upload.addEventListener('change', async () => {
     for (const file of upload.files) {
-      const asset = await storage.putAsset(file);
-      settings.images.push({ assetId: asset.id, name: file.name });
+      const uploaded = await storeFile(file);
+      if (!uploaded) continue;
+      settings.images.push({ url: uploaded.url, name: file.name });
     }
     upload.value = '';
     markDirty();
@@ -707,12 +711,13 @@ function buildPhotosForm(settings) {
 
 function buildPdfForm(settings) {
   inspector.append(el('p', 'note', 'Upload a flyer. If it has several pages, the TV turns them on its own.'));
-  inspector.append(fileButton(settings.assetId ? 'Replace the PDF' : 'Upload a PDF', 'application/pdf', async (file) => {
+  inspector.append(fileButton(settings.assetId || settings.url ? 'Replace the PDF' : 'Upload a PDF', 'application/pdf', async (file) => {
     const previous = settings.assetId;
-    const asset = await storage.putAsset(file);
-    settings.assetId = asset.id;
-    settings.url = '';
-    if (previous && previous !== asset.id) await storage.deleteAsset(previous);
+    const uploaded = await storeFile(file);
+    if (!uploaded) return;
+    settings.url = uploaded.url;
+    settings.assetId = null;
+    if (previous) await storage.deleteAsset(previous);
     markDirty();
     refreshWidget(selectedId);
     buildInspector();
@@ -764,8 +769,10 @@ function buildTakeoverForm() {
   });
   inspector.append(field('Look', templates));
   inspector.append(fileButton('Upload a background photo', 'image/*', async (file) => {
-    const asset = await storage.putAsset(file);
-    takeover.backgroundAssetId = asset.id;
+    const uploaded = await storeFile(file);
+    if (!uploaded) return;
+    takeover.backgroundUrl = uploaded.url;
+    takeover.backgroundAssetId = null;
     markDirty();
     if (previewTakeover) renderCanvas();
   }));
@@ -994,7 +1001,7 @@ function paintPalette() {
   sourceBlock.id = 'source-block';
   sourceBlock.append(el('h2', 'side-title', 'Where the TV looks'));
   const current = storage.getSource();
-  [['auto', 'Automatic - this computer after you save, otherwise the published file'], ['local', 'This computer'], ['published', 'The published file on the website']].forEach(([value, label]) => {
+  [['auto', 'The online board, then this computer if the network is down'], ['local', 'Only this computer'], ['published', 'Only the published file']].forEach(([value, label]) => {
     const labelNode = el('label', 'choice');
     const input = document.createElement('input');
     input.type = 'radio';
@@ -1037,12 +1044,44 @@ function startPaletteDrag(type, event) {
   document.addEventListener('pointerup', up);
 }
 
+async function storeFile(file) {
+  try {
+    return await storage.upload(file);
+  } catch (error) {
+    status.textContent = error.message || 'The file could not be uploaded.';
+    return null;
+  }
+}
+
 async function save() {
   state = normalize(state);
-  storage.saveLocal(state);
-  savedJson = JSON.stringify(state);
-  hasLocal = true;
-  status.textContent = 'Saved. The TVs on this computer will update.';
+  status.textContent = 'Saving online...';
+  try {
+    const result = await storage.saveOnline(state);
+    if (result.ok) {
+      savedJson = JSON.stringify(state);
+      hasLocal = true;
+      status.textContent = 'Saved online.';
+      return;
+    }
+    if (result.reason === 'signed-out') {
+      status.textContent = 'Sign in to save online.';
+      return;
+    }
+    if (result.reason === 'error') {
+      status.textContent = result.message || 'Could not save online.';
+      return;
+    }
+    const user = await currentUser();
+    status.textContent = user?.email
+      ? `Signed in as ${user.email}. That address is not an editor. An editor address is rabbi@akronshul.com.`
+      : 'That sign-in is not an editor. An editor address is rabbi@akronshul.com.';
+  } catch (error) {
+    const raw = error?.message || '';
+    status.textContent = /load failed|failed to fetch|network/i.test(raw)
+      ? 'Could not reach the online board. Nothing was changed.'
+      : (raw || 'Could not save online.');
+  }
 }
 
 async function exportFile() {
@@ -1092,7 +1131,7 @@ function bindChrome() {
     paintChrome();
     renderCanvas();
     buildInspector();
-    status.textContent = 'Imported and saved.';
+    await save();
   });
   document.getElementById('orient-land').addEventListener('click', () => {
     tv().orientation = 'landscape';
@@ -1200,8 +1239,76 @@ function bindChrome() {
   });
 }
 
+async function refreshAuth() {
+  const box = document.getElementById('signin');
+  const who = document.getElementById('who');
+  const email = document.getElementById('who-email');
+  const message = document.getElementById('auth-message');
+  if (!(await authReady())) {
+    message.textContent = 'Sign-in could not be loaded. Check the connection and reload.';
+  }
+  let user = null;
+  try { user = await currentUser(); } catch { user = null; }
+  if (user?.email) {
+    box.hidden = true;
+    who.hidden = false;
+    email.textContent = user.email;
+  } else {
+    box.hidden = false;
+    who.hidden = true;
+    email.textContent = '';
+  }
+}
+
+function wireAuth() {
+  const message = document.getElementById('auth-message');
+  document.getElementById('google-sign-in').addEventListener('click', async () => {
+    message.textContent = 'Opening Google...';
+    try { await signInWithGoogle(); }
+    catch (error) { message.textContent = error.message || 'Google sign-in did not start.'; }
+  });
+  document.getElementById('email-start').addEventListener('click', () => {
+    document.getElementById('email-code').hidden = false;
+  });
+  document.getElementById('email-send').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    message.textContent = 'Sending a code...';
+    try {
+      await sendEmailCode(email);
+      document.getElementById('code-row').hidden = false;
+      message.textContent = 'Check your email for the code, then enter it here.';
+    } catch (error) {
+      message.textContent = error.message || 'The code could not be sent.';
+    }
+  });
+  document.getElementById('email-verify').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const otp = document.getElementById('auth-code').value.trim();
+    message.textContent = 'Checking the code...';
+    try {
+      await signInWithCode(email, otp);
+      message.textContent = '';
+      await refreshAuth();
+    } catch (error) {
+      message.textContent = error.message || 'That code did not work.';
+    }
+  });
+  document.getElementById('sign-out').addEventListener('click', async () => {
+    try { await signOut(); } catch { /* still hide the name */ }
+    await refreshAuth();
+    status.textContent = 'Signed out.';
+  });
+}
+
 async function init() {
-  let config = storage.loadLocal();
+  wireAuth();
+  refreshAuth();
+  let config = null;
+  try {
+    const online = await storage.loadCloud();
+    if (online?.config) config = online.config;
+  } catch { config = null; }
+  if (!config) config = storage.loadLocal();
   if (!config) {
     try { config = await storage.loadPublished(); } catch { config = null; }
   }

@@ -6,13 +6,13 @@ The TV page is the site root. The editor is [editor.html](editor.html).
 
 ## Use the editor
 
-1. Open the editor on the computer that is plugged into the TV.
+1. Open the editor on a phone or a computer. Sign in with Google, or with an email code. The first time, use rabbi@akronshul.com.
 2. Pick the television at the top: TV 1 - Lobby, TV 2, and so on. **+ Add TV** makes another one. Type a name, and **Copy link** for the address that television should open. **Remove this TV** asks before it deletes one.
 3. Drag a piece from the left onto the screen, or click a piece to drop it in. Date, Shabbos times, logo, welcome line, photos, PDF flyer, events, announcement, and zmanim are all available.
 4. Drag a piece to move it. Drag the corners to resize it. Click it to change its words on the right.
 5. Use Landscape or Portrait so the shape matches that television. Each TV keeps its own shape, its own screens, and its own full-screen message.
-6. Press **Save**. Then press **Open the TV**, move that window onto the television, and press **Full screen**.
-7. After that, every Save updates the TVs on this computer. A TV with no name in the address shows TV 1. `index.html?tv=2` shows the second TV, and `index.html?tv=lobby` shows the one whose address says lobby.
+6. Press **Save**. The line should say **Saved online.** Then the television, on its own computer, picks that up within about half a minute. Open the TV address on that computer and press **Full screen**.
+7. A TV with no name in the address shows TV 1. `index.html?tv=2` shows the second TV, and `index.html?tv=lobby` shows the one whose address says lobby.
 
 The screen in the editor is a live preview. The television changes when you save.
 
@@ -20,9 +20,9 @@ The screen in the editor is a live preview. The television changes when you save
 
 Under "Where the TV looks":
 
-- **Automatic** uses this computer after you have saved, and otherwise uses the published file.
-- **This computer** always uses what you saved here.
-- **The published file** always uses `config.json` from the website, which is how a layout can be published from the repository.
+- **The online board, then this computer if the network is down** is the usual choice.
+- **Only this computer** ignores the online board.
+- **Only the published file** always uses `config.json` from the website.
 
 You can add more than one screen and turn on **Rotate the screens**. Each screen has its own pieces. The words are not copied when you add a screen.
 
@@ -60,15 +60,22 @@ https://akronrabbi.github.io/shul-display/
 
 ## Storage
 
-There is no server. The layout is saved in this browser (`localStorage`). Uploaded pictures and PDFs are saved in IndexedDB. The editor and the TV share that storage when they are on the same computer and the same site. Saving notifies the TV through a `BroadcastChannel`.
+Save writes every television into one online board. The television reads that board on its own, about every 30 seconds, and changes the picture without reloading. A copy stays in this browser, so the last layout keeps showing if the network drops.
 
-`js/storage.js` is the only place that talks to that storage. A cloud sync backend can replace `createStorage()` later without rewriting the screens.
+Sign in before you save. Google is first. An email code is the fallback. Only rabbi@akronshul.com, askmoses93@gmail.com, and mosheakron@gmail.com can change the board. Any other address is told so plainly, and the board is left as it was.
+
+Pictures, logos, and PDF flyers upload into the public media bucket. The layout stores that web address. Older pictures that were saved inside the file still show.
+
+**Export** and **Import** still work. Import also tries to save online when you are signed in.
+
+`config.json` is the fallback until the first online save, and when a television is set to the published file only.
 
 The pages also register a small service worker so the board can keep running after it has loaded once, even if the network blips. The first visit still needs a connection, for the fonts and, if you use a PDF, for PDF.js.
 
 ## Limits
 
-- The TV and the editor have to be the same browser on the same computer for Save to update the screen live. To move a setup, use Export and Import, or publish `config.json`.
+- The first online save has to be made by a signed-in editor. Until then, the television keeps the published layout.
+- A new picture or flyer needs that same sign-in. The upload does not stay only on the phone.
 - Very large photo libraries make a large export file. Prefer a modest set for a lobby slideshow.
 - Google Photos albums cannot be linked. Use uploads or Drive file links.
 - PDF pages are drawn with PDF.js from a CDN, so the first open of a flyer needs a network. After that the service worker can reuse it.

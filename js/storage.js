@@ -1,6 +1,6 @@
-// Storage seam. v1 keeps the layout on this computer (localStorage + IndexedDB)
-// and can also read a published config.json. A later cloud backend can replace
-// createStorage() without changing the editor or the display.
+// Storage seam. The online board is public.boards id "main".
+// This browser keeps a copy so the television still shows something offline.
+import { anonymousToken, boardHasLayout, readBoard, uploadMedia, writeBoard } from './cloud.js';
 
 const CONFIG_KEY = 'shul-display-config-v1';
 const SOURCE_KEY = 'shul-display-source-v1';
@@ -90,7 +90,8 @@ function stripAssets(config) {
   return copy;
 }
 
-export function createStorage() {
+export function createStorage(options = {}) {
+  const getToken = options.getToken || (async () => null);
   const listeners = new Set();
   const urls = new Map();
   let channel = null;
@@ -160,6 +161,31 @@ export function createStorage() {
       const message = { type: 'save', config: clean };
       if (channel) channel.postMessage(message);
       return clean;
+    },
+    async loadCloud() {
+      const token = await anonymousToken();
+      const row = await readBoard(token);
+      if (!boardHasLayout(row?.config)) return null;
+      this.saveLocal(row.config);
+      try { localStorage.setItem('shul-display-updated-at', row.updated_at || ''); } catch { /* ignore */ }
+      return { config: row.config, updated_at: row.updated_at };
+    },
+    async saveOnline(config) {
+      const clean = stripAssets(config);
+      let token = null;
+      try { token = await getToken(); } catch { token = null; }
+      if (!token) return { ok: false, reason: 'signed-out' };
+      const result = await writeBoard(token, clean);
+      if (result.ok) {
+        this.saveLocal(clean);
+        try { localStorage.setItem('shul-display-updated-at', result.updated_at || ''); } catch { /* ignore */ }
+      }
+      return result;
+    },
+    async upload(file) {
+      const token = await getToken();
+      if (!token) throw new Error('Sign in before you add pictures or flyers.');
+      return uploadMedia(token, file);
     },
     async loadPublished() {
       const url = new URL('../config.json', import.meta.url);

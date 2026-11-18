@@ -1,3 +1,4 @@
+import { anonymousToken, boardHasLayout, readBoard } from './cloud.js';
 import { createCalendar } from './calendar.js';
 import { normalizeConfig, pickTv } from './model.js';
 import { createStorage } from './storage.js';
@@ -100,23 +101,21 @@ async function paint() {
   if (key === currentKey) return;
   currentKey = key;
   const my = ++token;
-  clearMounts();
   if (showTakeover) {
-    stage.replaceChildren();
-    slot.hidden = false;
-    const dispose = await renderTakeover(slot, current.takeover || {}, makeCtx(screen));
+    const holder = document.createElement('div');
+    const dispose = await renderTakeover(holder, current.takeover || {}, makeCtx(screen));
     if (my !== token) {
       dispose();
       return;
     }
+    clearMounts();
+    slot.replaceChildren(...holder.childNodes);
+    slot.hidden = false;
+    stage.replaceChildren();
     disposers.push(dispose);
   } else {
-    slot.hidden = true;
-    slot.replaceChildren();
-    stage.replaceChildren();
-    const ctx = makeCtx(screen);
+    const shells = [];
     for (const widget of screen.widgets || []) {
-      if (my !== token) return;
       const shell = document.createElement('div');
       const place = placeOf(widget, orientation);
       shell.className = `widget tone-${widget.settings?.tone || 'ivory'}`;
@@ -127,8 +126,17 @@ async function paint() {
       const body = document.createElement('div');
       body.className = 'widget-body';
       shell.append(body);
-      stage.append(shell);
-      const dispose = await mountWidget(body, widget, ctx);
+      shells.push({ shell, body, widget });
+    }
+    if (my !== token) return;
+    clearMounts();
+    slot.hidden = true;
+    slot.replaceChildren();
+    stage.replaceChildren(...shells.map((item) => item.shell));
+    const ctx = makeCtx(screen);
+    for (const item of shells) {
+      if (my !== token) return;
+      const dispose = await mountWidget(item.body, item.widget, ctx);
       if (my !== token) {
         dispose();
         return;
@@ -147,29 +155,75 @@ function usingLocal() {
   return storage.loadLocal() != null;
 }
 
-async function load() {
-  if (!calendar) return;
-  const local = storage.loadLocal();
-  let raw = null;
-  if (usingLocal() && local) raw = local;
-  else {
-    try {
-      raw = await storage.loadPublished();
-    } catch {
-      raw = null;
-    }
-    if (!raw && local) raw = local;
-  }
-  if (!raw) {
-    stage.innerHTML = '<div class="boot-error">No layout is saved on this computer, and the published file could not be read.</div>';
-    return;
-  }
+let cloudStamp = '';
+
+function applyRaw(raw) {
   config = normalizeConfig(raw);
   const nextKey = JSON.stringify(config);
   if (nextKey === loadedKey && currentKey) return;
   loadedKey = nextKey;
   currentKey = '';
-  await paint();
+  return paint();
+}
+
+function cloudOn() {
+  if (forcedSource === 'local' || forcedSource === 'published') return false;
+  if (source === 'local' || source === 'published') return false;
+  return true;
+}
+
+async function load() {
+  if (!calendar) return;
+  const local = storage.loadLocal();
+  if (!cloudOn()) {
+    if ((forcedSource === 'local' || source === 'local') && local) {
+      await applyRaw(local);
+      return;
+    }
+    try {
+      const published = await storage.loadPublished();
+      if (published) await applyRaw(published);
+    } catch { /* ignore */ }
+    if (!config) stage.innerHTML = '<div class="boot-error">The published file could not be read.</div>';
+    return;
+  }
+  if (boardHasLayout(local)) await applyRaw(local);
+  try {
+    const token = await anonymousToken();
+    const row = await readBoard(token);
+    if (row) cloudStamp = row.updated_at || '';
+    if (boardHasLayout(row?.config)) {
+      storage.saveLocal(row.config);
+      await applyRaw(row.config);
+      return;
+    }
+  } catch {
+    // The last copy on this television stays up.
+  }
+  if (config) return;
+  try {
+    const published = await storage.loadPublished();
+    if (published) await applyRaw(published);
+  } catch { /* ignore */ }
+  if (!config) {
+    stage.innerHTML = '<div class="boot-error">No layout is saved on this computer, and the online board could not be read.</div>';
+  }
+}
+
+async function pollCloud() {
+  if (!calendar || !cloudOn()) return;
+  try {
+    const token = await anonymousToken();
+    const stamp = await readBoard(token, { stampOnly: true });
+    if (!stamp?.updated_at || stamp.updated_at === cloudStamp) return;
+    const row = await readBoard(token);
+    cloudStamp = row?.updated_at || stamp.updated_at;
+    if (!boardHasLayout(row?.config)) return;
+    storage.saveLocal(row.config);
+    await applyRaw(row.config);
+  } catch {
+    // Keep the picture that is already on screen.
+  }
 }
 
 storage.subscribe((message) => {
@@ -200,9 +254,7 @@ document.getElementById('fullscreen').addEventListener('click', () => {
 });
 
 setInterval(() => { paint(); }, 1000);
-setInterval(() => {
-  if (!usingLocal()) load();
-}, 60000);
+setInterval(() => { pollCloud(); }, 30000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});

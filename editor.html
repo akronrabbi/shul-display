@@ -30,6 +30,33 @@
       <button type="button" class="btn menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="top-actions">Menu</button>
     </div>
   </header>
+  <section class="signin" id="signin">
+    <div>
+      <h2>Sign in to save</h2>
+      <p>The first time, sign in with rabbi@akronshul.com. Google is the usual way. An email code works if Google does not.</p>
+    </div>
+    <div class="signin-actions">
+      <button type="button" class="btn btn-primary" id="google-sign-in">Continue with Google</button>
+      <button type="button" class="btn" id="email-start">Use an email code instead</button>
+      <div id="email-code" hidden>
+        <label>Email
+          <input id="auth-email" type="email" autocomplete="username" inputmode="email" placeholder="rabbi@akronshul.com">
+        </label>
+        <button type="button" class="btn" id="email-send">Send the code</button>
+        <div id="code-row" hidden>
+          <label>Code
+            <input id="auth-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+          </label>
+          <button type="button" class="btn btn-primary" id="email-verify">Sign in</button>
+        </div>
+      </div>
+      <p class="auth-message" id="auth-message"></p>
+    </div>
+  </section>
+  <div class="who" id="who" hidden>
+    <span>Signed in as <strong id="who-email"></strong></span>
+    <button type="button" class="btn" id="sign-out">Sign out</button>
+  </div>
   <div class="tv-bar">
     <select id="tv-select" class="tv-select" aria-label="Which TV"></select>
     <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
