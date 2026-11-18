@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Edit the lobby display - Anshe Sfard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Serif+Hebrew:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/theme.css">
+  <link rel="stylesheet" href="./css/widgets.css">
+  <link rel="stylesheet" href="./css/editor.css">
+  <style>html,body{background:#e7dccb}</style>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 class="brand-name">Anshe Sfard</h1>
+      <p class="brand-sub">Lobby display for Rabbi Moshe Sasonkin</p>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="btn" id="reload-published">Load published layout</button>
+      <button type="button" class="btn" id="import">Import</button>
+      <button type="button" class="btn" id="export">Export</button>
+      <button type="button" class="btn" id="open-tv">Open the TV</button>
+      <button type="button" class="btn btn-primary" id="save">Save</button>
+      <input id="import-file" type="file" accept="application/json,.json" hidden>
+    </div>
+  </header>
+  <div class="workspace">
+    <aside class="palette" id="palette"></aside>
+    <main class="board">
+      <div class="board-bar">
+        <div class="segment" role="group" aria-label="Screen shape">
+          <button type="button" id="orient-land">Landscape</button>
+          <button type="button" id="orient-port">Portrait</button>
+        </div>
+        <div class="tabs" id="tabs"></div>
+        <label class="choice"><input type="checkbox" id="cycle"> Rotate the screens</label>
+        <div class="status" id="status"></div>
+      </div>
+      <div class="board-frame" id="board-frame">
+        <div class="screen-canvas" id="canvas"></div>
+      </div>
+    </main>
+    <aside class="inspector" id="inspector"></aside>
+  </div>
+  <script src="./vendor/hebcal/hebcal-core.min.js"></script>
+  <script type="module" src="./js/editor.js"></script>
+</body>
+</html>

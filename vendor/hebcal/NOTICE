@@ -1,0 +1,11 @@
+@hebcal/core v6.16.1
+Copyright (c) Michael J. Radwin and contributors
+Copyright (c) 1994-2020 Danny Sadinoff
+License: GPL-2.0-or-later
+https://www.gnu.org/licenses/gpl-2.0.txt
+Source: https://github.com/hebcal/hebcal-es6
+
+The file hebcal-core.min.js is the unmodified upstream browser bundle,
+with the source-map comment removed. It is a separate library used by
+this display to compute Hebrew dates, the weekly parsha, and Akron
+candle-lighting and havdalah times.

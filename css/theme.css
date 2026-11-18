@@ -1,0 +1,48 @@
+:root {
+  --navy: #101a2c;
+  --navy-deep: #0c1422;
+  --ink: #241c16;
+  --burgundy: #6d2433;
+  --burgundy-deep: #4a1824;
+  --gold: #b8893d;
+  --gold-bright: #e4d2a4;
+  --gold-ink: #8a6230;
+  --ivory: #fffaf3;
+  --ivory-deep: #f3eadc;
+  --paper: #e7dccb;
+  --muted: #6e6458;
+  --line: rgba(138, 98, 48, 0.28);
+  --serif: "Fraunces", "Iowan Old Style", Palatino, "Palatino Linotype", "Times New Roman", serif;
+  --hebrew: "Noto Serif Hebrew", "David Libre", "Times New Roman", serif;
+  --sans: "Source Sans 3", "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+}
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; }
+
+img { max-width: 100%; }
+
+.he {
+  font-family: var(--hebrew);
+  direction: rtl;
+  unicode-bidi: isolate;
+  text-align: left;
+  line-height: 1.45;
+}

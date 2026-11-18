@@ -1,0 +1,49 @@
+// Google Photos shared albums cannot be read from a static page.
+// Uploads and direct image addresses work. Public Google Drive file links
+// are rewritten to a lh3 image address, which a plain <img> can show.
+
+const PHOTOS_ALBUM = /photos\.app\.goo\.gl|photos\.google\.com\/(?:share|album|u\/\d+\/album)/i;
+
+export function safeImageUrl(value) {
+  if (!value) return '';
+  const url = String(value).trim();
+  if (url.startsWith('assets/') || url.startsWith('./assets/')) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(url)) return url;
+  return '';
+}
+
+export function driveFileToImage(url) {
+  const file = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  const open = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+  const query = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  const id = (file || open || query)?.[1];
+  if (!id || !/drive\.google\.com/i.test(url)) return null;
+  return `https://lh3.googleusercontent.com/d/${id}=w2400`;
+}
+
+export function classifyImageLine(line) {
+  const raw = String(line || '').trim();
+  if (!raw) return null;
+  if (PHOTOS_ALBUM.test(raw)) return { error: 'photos-album', raw };
+  const drive = driveFileToImage(raw);
+  if (drive) return { url: drive };
+  const safe = safeImageUrl(raw);
+  if (safe) return { url: safe };
+  return { error: 'bad-url', raw };
+}
+
+export function classifyImageList(text) {
+  const images = [];
+  const errors = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const item = classifyImageLine(line);
+    if (!item) continue;
+    if (item.url) images.push({ url: item.url });
+    else errors.push(item);
+  }
+  return { images, errors };
+}
+
+export const PHOTOS_HELP =
+  'A Google Photos album link cannot be read from this page. Google closed the shared-album API, and a browser is not allowed to open the album itself. Upload the photos, or paste a direct image address. A Google Drive file that is shared as "anyone with the link" works too: paste that file link and it will be turned into an image.';

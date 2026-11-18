@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Calendar check</title>
+</head>
+<body>
+  <pre id="out">running</pre>
+  <script src="../vendor/hebcal/hebcal-core.min.js"></script>
+  <script type="module">
+    import { createCalendar, akronWallTimeToDate } from '../js/calendar.js';
+    import { isCurrentEvent } from '../js/events.js';
+    import { classifyImageLine } from '../js/images.js';
+
+    const failures = [];
+    const check = (name, ok, detail) => {
+      if (!ok) failures.push(name + (detail ? ' - ' + detail : ''));
+    };
+    const time = (value) => String(value || '').replace(/\s/g, '').toLowerCase();
+
+    const cal = createCalendar(globalThis.hebcal);
+    const wed = new Date('2026-11-18T18:00:00Z');
+    const he = cal.hebrew(wed);
+    check('weekday', he.weekday === 'Wednesday', he.weekday);
+    check('civil', he.dateLine === 'November 18, 2026', he.dateLine);
+    check('translit', he.translit.includes('Kislev') && he.translit.includes('8'), he.translit);
+    check('hebrew letters', he.hebrew.includes('כ') && he.hebrew.includes('תשפ'), he.hebrew);
+    const sh = cal.shabbos(wed, { candleLightingMins: 18, havdalahMode: 'degrees', havdalahDeg: 8.5 });
+    check('parsha', sh.parsha.en === 'Parashat Vayetzei', sh.parsha.en);
+    check('parsha he', sh.parsha.he.includes('וַיֵּצֵא') || sh.parsha.he.includes('ויצא'), sh.parsha.he);
+    check('candles', time(sh.candles.time) === '4:45pm', sh.candles.time);
+    check('havdalah', time(sh.havdalah.time) === '5:47pm', sh.havdalah.time);
+    check('candle day', sh.candles.when.includes('Friday') && sh.candles.when.includes('20'), sh.candles.when);
+
+    const afterSunset = cal.hebrew(new Date('2026-11-18T23:00:00Z'));
+    check('after sunset', afterSunset.translit.includes('9'), afterSunset.translit + ' / ' + afterSunset.hebrew);
+
+    const motzei = new Date('2026-11-21T23:30:00Z');
+    const next = cal.shabbos(motzei, { candleLightingMins: 18, havdalahMode: 'degrees', havdalahDeg: 8.5 });
+    check('next parsha', next.parsha.en === 'Parashat Vayishlach', next.parsha.en);
+    check('next candles', time(next.candles.time) === '4:41pm', next.candles.time);
+    check('next havdalah', time(next.havdalah.time) === '5:44pm', next.havdalah.time);
+
+    const mins = cal.shabbos(wed, { candleLightingMins: 18, havdalahMode: 'minutes', havdalahMins: 42 });
+    check('42 min havdalah', time(mins.havdalah.time) === '5:45pm', mins.havdalah.time);
+
+    const wall = akronWallTimeToDate(2026, 11, 20, 16, 45);
+    check('akron instant', wall.toISOString() === '2026-11-20T21:45:00.000Z', wall.toISOString());
+
+    check('past event', !isCurrentEvent({ title: 'Old', date: '2026-11-01', time: '10:00' }, wed));
+    check('future event', isCurrentEvent({ title: 'Erev', date: '2026-11-20', time: '16:45' }, wed));
+
+    const album = classifyImageLine('https://photos.app.goo.gl/example');
+    check('photos rejected', album.error === 'photos-album');
+    const drive = classifyImageLine('https://drive.google.com/file/d/abc123XYZ/view');
+    check('drive image', drive.url === 'https://lh3.googleusercontent.com/d/abc123XYZ=w2400', drive.url);
+
+    const z = cal.zmanim(wed);
+    const sunset = z.items.find((item) => item.key === 'sunset');
+    check('sunset present', Boolean(sunset && sunset.time));
+
+    document.getElementById('out').textContent = failures.length
+      ? 'FAIL\n' + failures.join('\n')
+      : 'PASS\n' + [he.hebrew, he.translit, sh.parsha.en, sh.parsha.he, sh.candles.time, sh.havdalah.time, sunset.time].join('\n');
+    window.__ready = true;
+    window.__pass = failures.length === 0;
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anshe Sfard - Lobby display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Noto+Serif+Hebrew:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/theme.css">
+  <link rel="stylesheet" href="./css/widgets.css">
+  <link rel="stylesheet" href="./css/display.css">
+  <style>html,body{background:#101a2c}</style>
+</head>
+<body>
+  <div class="bezel">
+    <h1 class="sr-only" style="position:absolute;left:-9999px">Anshe Sfard lobby display</h1>
+    <div class="stage" id="stage"></div>
+    <div class="takeover-slot" id="takeover" hidden></div>
+  </div>
+  <div class="hud">
+    <a href="./editor.html">Edit</a>
+    <button type="button" id="fullscreen">Full screen</button>
+  </div>
+  <script src="./vendor/hebcal/hebcal-core.min.js"></script>
+  <script type="module" src="./js/display.js"></script>
+</body>
+</html>

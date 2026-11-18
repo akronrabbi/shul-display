@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "orientation": "landscape",
+  "cycleScreens": false,
+  "activeScreen": 0,
+  "screens": [
+    {
+      "id": "main",
+      "name": "Main",
+      "duration": 30,
+      "widgets": [
+        {
+          "id": "w-welcome",
+          "type": "welcome",
+          "settings": {
+            "tone": "band",
+            "text": "Good Shabbos  -  Anshe Sfard - Revere Road Synagogue",
+            "mode": "static"
+          },
+          "place": {
+            "landscape": { "x": 0, "y": 0, "w": 100, "h": 14 },
+            "portrait": { "x": 0, "y": 0, "w": 100, "h": 8 }
+          }
+        },
+        {
+          "id": "w-logo",
+          "type": "logo",
+          "settings": {
+            "tone": "clear",
+            "url": "assets/akron-shul-logo.png",
+            "assetId": null,
+            "showName": true,
+            "name": "Anshe Sfard",
+            "subtitle": "Revere Road"
+          },
+          "place": {
+            "landscape": { "x": 2, "y": 16, "w": 20, "h": 36 },
+            "portrait": { "x": 30, "y": 10, "w": 40, "h": 14 }
+          }
+        },
+        {
+          "id": "w-date",
+          "type": "date",
+          "settings": {
+            "tone": "ivory",
+            "showClock": true,
+            "showEnglish": true,
+            "showHebrew": true,
+            "hebrewStyle": "nikud",
+            "showTranslit": true,
+            "showParsha": true
+          },
+          "place": {
+            "landscape": { "x": 24, "y": 16, "w": 36, "h": 36 },
+            "portrait": { "x": 6, "y": 26, "w": 88, "h": 18 }
+          }
+        },
+        {
+          "id": "w-shabbos",
+          "type": "shabbos",
+          "settings": {
+            "tone": "navy",
+            "heading": "Shabbos",
+            "showParsha": true,
+            "showHebrewParsha": true,
+            "candleLightingMins": 18,
+            "havdalahMode": "degrees",
+            "havdalahDeg": 8.5,
+            "havdalahMins": 42
+          },
+          "place": {
+            "landscape": { "x": 62, "y": 16, "w": 36, "h": 36 },
+            "portrait": { "x": 6, "y": 46, "w": 88, "h": 20 }
+          }
+        },
+        {
+          "id": "w-events",
+          "type": "events",
+          "settings": {
+            "tone": "ivory",
+            "heading": "Upcoming",
+            "events": [
+              {
+                "id": "e-1120",
+                "title": "Erev Shabbat",
+                "date": "2026-11-20",
+                "time": "16:45",
+                "note": "Parashat Vayetzei",
+                "location": ""
+              },
+              {
+                "id": "e-1121",
+                "title": "Shabbat day",
+                "date": "2026-11-21",
+                "time": "",
+                "note": "Parashat Vayetzei",
+                "location": ""
+              },
+              {
+                "id": "e-1127",
+                "title": "Erev Shabbat",
+                "date": "2026-11-27",
+                "time": "16:41",
+                "note": "Parashat Vayishlach",
+                "location": ""
+              }
+            ]
+          },
+          "place": {
+            "landscape": { "x": 2, "y": 54, "w": 58, "h": 44 },
+            "portrait": { "x": 6, "y": 68, "w": 88, "h": 16 }
+          }
+        },
+        {
+          "id": "w-text",
+          "type": "text",
+          "settings": {
+            "tone": "burgundy",
+            "eyebrow": "The shul",
+            "title": "Rabbi Moshe Sasonkin",
+            "body": "646 N Revere Road\nAkron, Ohio 44333\n330.867.7292"
+          },
+          "place": {
+            "landscape": { "x": 62, "y": 54, "w": 36, "h": 44 },
+            "portrait": { "x": 6, "y": 86, "w": 88, "h": 12 }
+          }
+        }
+      ]
+    }
+  ],
+  "takeover": {
+    "enabled": false,
+    "template": "classic",
+    "eyebrow": "Anshe Sfard",
+    "title": "Welcome to the Bat Mitzvah of Chaya Cohen",
+    "subtitle": "Shabbat Parashat Vayetzei",
+    "details": "Saturday, November 21, 2026",
+    "footer": "Revere Road Synagogue  -  Akron",
+    "backgroundAssetId": null,
+    "backgroundUrl": "",
+    "scheduleEnabled": false,
+    "start": "",
+    "end": ""
+  }
+}
