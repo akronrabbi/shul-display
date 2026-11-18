@@ -46,4 +46,4 @@ export function classifyImageList(text) {
 }
 
 export const PHOTOS_HELP =
-  'A Google Photos album link cannot be read from this page. Google closed the shared-album API, and a browser is not allowed to open the album itself. Upload the photos, or paste a direct image address. A Google Drive file that is shared as "anyone with the link" works too: paste that file link and it will be turned into an image.';
+  'Upload pictures, paste image addresses, or point this piece at a Google Drive folder. A Google Photos album link still cannot be read from this page. A single Drive file that is shared as "anyone with the link" can be pasted as an image address.';

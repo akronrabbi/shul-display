@@ -40,9 +40,11 @@ Checked against Hebcal for the week of 18 November 2026: Wednesday daytime is 8 
 
 ## Photos
 
-Upload pictures, or paste direct image addresses, one per line. A Google Drive file that anyone with the link can open can be pasted as the Drive link. The editor turns it into an image address.
+Upload pictures, or paste direct image addresses, one per line. A single Google Drive file shared as "anyone with the link" can be pasted as the Drive link. The editor turns it into an image address.
 
-A Google Photos shared-album link is not supported. Google removed shared-album access from the Photos API on 31 March 2025, and a static page is not allowed to read the album page itself (the browser blocks that request). Sending the album through an unofficial proxy would be unreliable and would hand the photos to someone else's server. Uploads stay on this computer and keep working if the network drops.
+A whole Drive folder works too. Share the folder as Anyone with the link, paste the folder link, and paste a Google API key locked to `https://akronrabbi.github.io/*` and to the Drive API only. The steps are in the photo piece. The TV asks Google for the picture list about every 10 minutes, so new pictures show up on their own. The key is stored with the layout. Restrict it, because anyone who can view the page can see it.
+
+A Google Photos album link is not supported. Google removed shared-album access on 31 March 2025. The album page cannot be framed or read by this browser, and the other Photos APIs need a person to sign in each time, or approval as a device partner. Uploads and a Drive folder are the ways that keep working.
 
 ## Logo
 

@@ -2,6 +2,7 @@ import { createCalendar } from './calendar.js';
 import { blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
+import { explainDriveError, listDriveFolderImages } from './drive.js';
 import { isCurrentEvent } from './events.js';
 import {
   WIDGET_TYPES,
@@ -620,6 +621,56 @@ function buildPhotosForm(settings) {
     }
   });
   inspector.append(addLinks);
+  const folder = document.createElement('input');
+  folder.type = 'text';
+  folder.placeholder = 'https://drive.google.com/drive/folders/...';
+  folder.value = settings.driveFolder || '';
+  folder.spellcheck = false;
+  folder.addEventListener('input', () => { settings.driveFolder = folder.value.trim(); markDirty(); });
+  inspector.append(field('Google Drive folder link', folder));
+  const key = document.createElement('input');
+  key.type = 'text';
+  key.placeholder = 'API key';
+  key.value = settings.driveApiKey || '';
+  key.spellcheck = false;
+  key.autocomplete = 'off';
+  key.addEventListener('input', () => { settings.driveApiKey = key.value.trim(); markDirty(); });
+  inspector.append(field('Google API key', key));
+  const driveStatus = el('p', 'note', 'The TV looks again about every 10 minutes, so new pictures show up on their own.');
+  const check = actionButton('Check the folder', async () => {
+    check.disabled = true;
+    driveStatus.textContent = 'Looking in the folder...';
+    try {
+      const images = await listDriveFolderImages(settings.driveFolder, settings.driveApiKey);
+      driveStatus.textContent = images.length
+        ? `Found ${images.length} picture${images.length === 1 ? '' : 's'}. Save, and the TV will show them.`
+        : 'That folder has no pictures yet.';
+      refreshWidget(selectedId);
+    } catch (error) {
+      driveStatus.textContent = explainDriveError(error);
+      refreshWidget(selectedId);
+    }
+    check.disabled = false;
+  });
+  inspector.append(check);
+  inspector.append(driveStatus);
+  const steps = document.createElement('details');
+  steps.className = 'key-steps';
+  steps.open = true;
+  const summary = document.createElement('summary');
+  summary.textContent = 'How to make a safe Google key';
+  const stepsBody = el('ol', 'note');
+  [
+    'Go to console.cloud.google.com and create a project. Any name is fine.',
+    'Search for Google Drive API and turn it on.',
+    'Open APIs and services, then Credentials, then Create credentials, then API key.',
+    'Edit the key. Under Application restrictions choose Websites, and add https://akronrabbi.github.io/* . Under API restrictions choose Restrict key, and allow only the Google Drive API. Save.',
+    'In Google Drive, share the folder as Anyone with the link (Viewer is enough). Copy that folder link.',
+    'Paste the link and the key above, press Check the folder, then Save.',
+  ].forEach((line) => stepsBody.append(el('li', '', line)));
+  const caution = el('p', 'note', 'The key is visible in the page, so the limits in step 4 matter. Do not leave it open to every website or every Google API. To try the folder on this computer before the site is published, you can also add http://localhost/* and http://127.0.0.1/* .');
+  steps.append(summary, stepsBody, caution);
+  inspector.append(steps);
   inspector.append(field('Seconds on each photo', numberInput(settings.interval, (value) => { settings.interval = Number(value); })));
   inspector.append(checkInput(settings.crossfade, 'Fade between photos', (value) => { settings.crossfade = value; }));
   inspector.append(field('Fit', selectInput(settings.fit, [['cover', 'Fill the box'], ['contain', 'Show the whole photo']], (value) => { settings.fit = value; })));

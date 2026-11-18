@@ -12,6 +12,7 @@
     import { isCurrentEvent } from '../js/events.js';
     import { classifyImageLine } from '../js/images.js';
     import { normalizeConfig, pickTv } from '../js/model.js';
+    import { parseDriveFolderId, explainDriveError } from '../js/drive.js';
 
     const failures = [];
     const check = (name, ok, detail) => {
@@ -75,6 +76,12 @@
     check('tv number', pickTv(pair, '2').id === 'social-hall');
     check('tv slug', pickTv(pair, 'social-hall').id === 'social-hall');
     check('no double wrap', normalizeConfig(migrated).tvs.length === 1);
+
+    const folder = 'https://drive.google.com/drive/u/0/folders/1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd?usp=sharing';
+    check('folder id', parseDriveFolderId(folder) === '1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd');
+    check('folder query', parseDriveFolderId('https://drive.google.com/embeddedfolderview?id=abc_def-123') === 'abc_def-123');
+    check('not a folder', parseDriveFolderId('https://photos.app.goo.gl/example') === '');
+    check('bad key words', explainDriveError(new Error('API key not valid. Please pass a valid API key.')).includes('not valid'));
 
     document.getElementById('out').textContent = failures.length
       ? 'FAIL\n' + failures.join('\n')

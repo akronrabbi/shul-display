@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v2';
+const CACHE = 'shul-display-v3';
 const FILES = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const FILES = [
   './js/model.js',
   './js/storage.js',
   './js/widgets.js',
+  './js/drive.js',
   './js/display.js',
   './js/editor.js',
   './assets/akron-shul-logo.png',

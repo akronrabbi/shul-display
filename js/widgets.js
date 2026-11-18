@@ -1,6 +1,7 @@
 import { akronWallTimeToDate } from './calendar.js';
 import { upcomingEvents, formatClockNumbers, eventDateParts, isCurrentEvent } from './events.js';
 import { safeImageUrl, PHOTOS_HELP } from './images.js';
+import { driveRefreshMs, explainDriveError, listDriveFolderImages } from './drive.js';
 
 export { PHOTOS_HELP };
 
@@ -36,7 +37,7 @@ export const WIDGET_TYPES = [
   {
     type: 'photos',
     label: 'Photos',
-    blurb: 'A slow slideshow',
+    blurb: 'A slow slideshow, or a Google Drive folder',
     size: { w: 40, h: 36 },
     portrait: { w: 88, h: 22 },
   },
@@ -116,7 +117,15 @@ export function defaultSettings(type) {
         mode: 'static',
       };
     case 'photos':
-      return { tone: 'clear', images: [], interval: 8, crossfade: true, fit: 'cover' };
+      return {
+        tone: 'clear',
+        images: [],
+        interval: 8,
+        crossfade: true,
+        fit: 'cover',
+        driveFolder: '',
+        driveApiKey: '',
+      };
     case 'pdf':
       return { tone: 'ivory', assetId: null, url: '', interval: 12 };
     case 'events':
@@ -362,33 +371,45 @@ function chunk(text) {
   return node;
 }
 
-async function mountPhotos(body, widget, ctx) {
-  const bag = [];
-  const settings = widget.settings;
+async function collectPhotoUrls(settings, ctx) {
   const urls = [];
   for (const image of settings.images || []) {
     const url = image.assetId ? await ctx.resolveAsset(image.assetId) : safeImageUrl(image.url);
     if (url) urls.push(url);
   }
-  const root = h('div', 'photos');
-  if (!urls.length) {
-    root.append(h('div', 'empty-note', 'Add photos in the editor.'));
-    body.append(root);
-    return () => {};
+  let driveError = null;
+  if (String(settings.driveFolder || '').trim()) {
+    try {
+      const listed = await listDriveFolderImages(settings.driveFolder, settings.driveApiKey);
+      for (const image of listed) urls.push(image.url);
+    } catch (error) {
+      driveError = error;
+    }
   }
+  return { urls, driveError };
+}
+
+async function mountPhotos(body, widget, ctx) {
+  const bag = [];
+  const settings = widget.settings;
+  const urls = [];
+  const root = h('div', 'photos');
+  const note = h('div', 'empty-note', 'Looking for photos...');
   const fit = settings.fit === 'contain' ? 'contain' : 'cover';
-  const a = h('img', 'photo on');
+  const a = h('img', 'photo');
   const b = h('img', 'photo');
   a.alt = '';
   b.alt = '';
+  a.referrerPolicy = 'no-referrer';
+  b.referrerPolicy = 'no-referrer';
   a.style.objectFit = fit;
   b.style.objectFit = fit;
-  root.append(a, b);
+  root.append(a, b, note);
   body.append(root);
 
   let index = 0;
   let front = a;
-  a.src = urls[0];
+  let slideTimer = 0;
   const fade = settings.crossfade !== false;
   const step = () => {
     if (urls.length < 2) return;
@@ -404,9 +425,39 @@ async function mountPhotos(body, widget, ctx) {
     }
     front = next;
   };
-  if (urls.length > 1) {
+  const ensureSlides = () => {
+    if (slideTimer || urls.length < 2) return;
     const ms = Math.max(2, Number(settings.interval) || 8) * 1000;
-    every(ms, step, bag);
+    slideTimer = setInterval(step, ms);
+    bag.push(() => clearInterval(slideTimer));
+  };
+  const show = () => {
+    note.hidden = urls.length > 0;
+    if (!urls.length) return;
+    if (!a.getAttribute('src')) {
+      a.src = urls[0];
+      a.classList.add('on');
+      front = a;
+      index = 0;
+    } else if (index >= urls.length) {
+      index = 0;
+    }
+    ensureSlides();
+  };
+  const reload = async () => {
+    const found = await collectPhotoUrls(settings, ctx);
+    urls.splice(0, urls.length, ...found.urls);
+    if (!urls.length) {
+      note.hidden = false;
+      if (found.driveError) note.textContent = explainDriveError(found.driveError);
+      else if (String(settings.driveFolder || '').trim()) note.textContent = 'That folder has no pictures yet.';
+      else note.textContent = 'Add photos in the editor.';
+    }
+    show();
+  };
+  await reload();
+  if (String(settings.driveFolder || '').trim()) {
+    every(driveRefreshMs(), () => { reload(); }, bag);
   }
   return () => bag.forEach((fn) => fn());
 }
