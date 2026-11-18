@@ -1,4 +1,5 @@
 import { akronWallTimeToDate } from './calendar.js';
+import { fixedSize, stylePart } from './type.js';
 import { upcomingEvents, formatClockNumbers, eventDateParts, isCurrentEvent } from './events.js';
 import { safeImageUrl, PHOTOS_HELP } from './images.js';
 import { driveRefreshMs, explainDriveError, listDriveFolderImages } from './drive.js';
@@ -186,13 +187,20 @@ function h(tag, className, text) {
   return node;
 }
 
-function hebrewLine(className, text) {
+function hebrewLine(className, text, type, part) {
   const node = h('div', `hebrew-line ${className}`);
   const bdi = document.createElement('bdi');
   bdi.lang = 'he';
   bdi.dir = 'rtl';
   bdi.textContent = text;
   node.append(bdi);
+  stylePart(node, type, part);
+  return node;
+}
+
+function piece(className, text, type, part) {
+  const node = h('div', className, text);
+  stylePart(node, type, part);
   return node;
 }
 
@@ -250,24 +258,24 @@ function mountDate(body, widget, ctx) {
     const he = ctx.calendar.hebrew(now);
     const shabbos = ctx.calendar.shabbos(now, ctx.shabbosSettings || {});
     root.replaceChildren();
-    root.append(h('div', 'eyebrow', 'Today'));
+    root.append(piece('eyebrow', settings.kicker || 'Today', settings.type, 'small'));
     if (settings.showClock !== false) {
-      const clock = h('div', 'clock js-clock', ctx.calendar.formatTime(now));
+      const clock = piece('clock js-clock', ctx.calendar.formatTime(now), settings.type, 'title');
       root.append(clock);
     }
     if (settings.showEnglish !== false) {
-      root.append(h('div', 'weekday', he.weekday));
-      root.append(h('div', 'civil', he.dateLine));
+      root.append(piece('weekday', he.weekday, settings.type, 'title'));
+      root.append(piece('civil', he.dateLine, settings.type, 'body'));
     }
     if (settings.showHebrew !== false) {
       root.append(h('div', 'rule'));
       const line = settings.hebrewStyle === 'plain' ? he.plain : he.hebrew;
-      root.append(hebrewLine('date-he', line));
+      root.append(hebrewLine('date-he', line, settings.type, 'body'));
     }
-    if (settings.showTranslit !== false) root.append(h('div', 'translit', he.translit));
+    if (settings.showTranslit !== false) root.append(piece('translit', he.translit, settings.type, 'body'));
     if (settings.showParsha !== false && shabbos?.parsha) {
-      root.append(h('div', 'parsha-en', shabbos.parsha.en));
-      if (shabbos.parsha.he) root.append(hebrewLine('parsha-he', shabbos.parsha.he));
+      root.append(piece('parsha-en', shabbos.parsha.en, settings.type, 'body'));
+      if (shabbos.parsha.he) root.append(hebrewLine('parsha-he', shabbos.parsha.he, settings.type, 'body'));
     }
     const clock = root.querySelector('.js-clock');
     if (clock) clock.textContent = ctx.calendar.formatTime(ctx.now());
@@ -291,19 +299,19 @@ function mountShabbos(body, widget, ctx) {
   const paint = () => {
     const info = ctx.calendar.shabbos(ctx.now(), settings);
     root.replaceChildren();
-    root.append(h('div', 'eyebrow', settings.heading || 'Shabbos'));
+    root.append(piece('eyebrow', settings.heading || 'Shabbos', settings.type, 'small'));
     if (settings.showParsha !== false && info?.parsha) {
-      root.append(h('div', 'parsha-en', info.parsha.en));
+      root.append(piece('parsha-en', info.parsha.en, settings.type, 'body'));
       if (settings.showHebrewParsha !== false && info.parsha.he) {
-        root.append(hebrewLine('parsha-he', info.parsha.he));
+        root.append(hebrewLine('parsha-he', info.parsha.he, settings.type, 'body'));
       }
     }
     const times = h('div', 'shabbos-times');
     if (!info) {
       times.append(h('p', 'quiet', 'Times are not available right now.'));
     } else {
-      times.append(timeBlock('Candle lighting', info.candles.time, info.candles.when));
-      times.append(timeBlock('Havdalah', info.havdalah.time, info.havdalah.when));
+      times.append(timeBlock(settings.candleLabel || 'Candle lighting', info.candles.time, info.candles.when, settings.type));
+      times.append(timeBlock(settings.havdalahLabel || 'Havdalah', info.havdalah.time, info.havdalah.when, settings.type));
     }
     root.append(times);
   };
@@ -313,11 +321,11 @@ function mountShabbos(body, widget, ctx) {
   return () => bag.forEach((fn) => fn());
 }
 
-function timeBlock(label, time, when) {
+function timeBlock(label, time, when, type) {
   const block = h('div', 'time-block');
-  block.append(h('div', 'time-label', label));
-  block.append(h('div', 'time-value', time));
-  block.append(h('div', 'time-when', when));
+  block.append(piece('time-label', label, type, 'small'));
+  block.append(piece('time-value', time, type, 'title'));
+  block.append(piece('time-when', when, type, 'small'));
   return block;
 }
 
@@ -331,8 +339,8 @@ async function mountLogo(body, widget, ctx) {
     img.src = src;
     root.append(img);
   }
-  if (settings.showName !== false && settings.name) root.append(h('div', 'logo-name', settings.name));
-  if (settings.subtitle) root.append(h('div', 'logo-sub', settings.subtitle));
+  if (settings.showName !== false && settings.name) root.append(piece('logo-name', settings.name, settings.type, 'title'));
+  if (settings.subtitle) root.append(piece('logo-sub', settings.subtitle, settings.type, 'small'));
   body.append(root);
   return () => {};
 }
@@ -347,8 +355,8 @@ function mountWelcome(body, widget) {
     const track = h('div', 'welcome-track');
     const seconds = Math.max(12, Math.round(text.length / 4));
     track.style.setProperty('--ticker-time', `${seconds}s`);
-    track.append(chunk(text));
-    track.append(chunk(text));
+    track.append(chunk(text, settings.type));
+    track.append(chunk(text, settings.type));
     root.append(track);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       track.style.animation = 'none';
@@ -357,17 +365,20 @@ function mountWelcome(body, widget) {
     const box = h('div', 'welcome-still');
     const line = h('div', 'welcome-line', text);
     line.dir = 'auto';
+    stylePart(line, settings.type, 'line');
+    if (fixedSize(settings.type)) line.style.whiteSpace = 'pre-line';
     box.append(line);
     root.append(box);
-    watchFit(line, box, bag, { line: true });
+    if (!fixedSize(settings.type)) watchFit(line, box, bag, { line: true });
   }
   body.append(root);
   return () => bag.forEach((fn) => fn());
 }
 
-function chunk(text) {
+function chunk(text, type) {
   const node = h('span', 'welcome-chunk', text);
   node.dir = 'auto';
+  stylePart(node, type, 'line');
   return node;
 }
 
@@ -405,6 +416,7 @@ async function mountPhotos(body, widget, ctx) {
   a.style.objectFit = fit;
   b.style.objectFit = fit;
   root.append(a, b, note);
+  if (settings.caption) root.append(piece('caption', settings.caption, settings.type, 'small'));
   body.append(root);
 
   let index = 0;
@@ -496,6 +508,7 @@ async function mountPdf(body, widget, ctx) {
   const canvas = document.createElement('canvas');
   const label = h('div', 'pdf-page', '');
   root.append(canvas, label);
+  if (settings.caption) root.append(piece('caption', settings.caption, settings.type, 'small'));
   let pdf;
   let pageNum = 1;
   let drawing = false;
@@ -548,7 +561,7 @@ function mountEvents(body, widget, ctx) {
   const bag = [];
   const settings = widget.settings;
   const root = h('div', 'plaque events-card');
-  const eyebrow = h('div', 'eyebrow', settings.heading || 'Upcoming');
+  const eyebrow = piece('eyebrow', settings.heading || 'Upcoming', settings.type, 'small');
   const grow = h('div', 'grow');
   const list = h('div', 'event-list');
   grow.append(list);
@@ -565,16 +578,16 @@ function mountEvents(body, widget, ctx) {
         const parts = eventDateParts(event.date);
         const row = h('article', 'event-row');
         const when = h('div', 'event-when');
-        when.append(h('div', 'event-dow', parts.dow));
-        when.append(h('div', 'event-day', parts.day));
-        when.append(h('div', 'event-month', parts.month));
+        when.append(piece('event-dow', parts.dow, settings.type, 'small'));
+        when.append(piece('event-day', parts.day, settings.type, 'title'));
+        when.append(piece('event-month', parts.month, settings.type, 'small'));
         const what = h('div', 'event-what');
-        const title = h('div', 'event-title', event.title);
+        const title = piece('event-title', event.title, settings.type, 'title');
         title.dir = 'auto';
         what.append(title);
         const metaBits = [formatClockNumbers(event.time), event.location, event.note].filter(Boolean);
         if (metaBits.length) {
-          const meta = h('div', 'event-meta', metaBits.join('  -  '));
+          const meta = piece('event-meta', metaBits.join('  -  '), settings.type, 'small');
           meta.dir = 'auto';
           what.append(meta);
         }
@@ -582,11 +595,11 @@ function mountEvents(body, widget, ctx) {
         list.append(row);
       }
     }
-    fitBox(list, grow, { max: 76 });
+    if (!fixedSize(settings.type)) fitBox(list, grow, { max: 76 });
   };
 
   paint();
-  watchFit(list, grow, bag, { max: 76 });
+  if (!fixedSize(settings.type)) watchFit(list, grow, bag, { max: 76 });
   every(30000, paint, bag);
   return () => bag.forEach((fn) => fn());
 }
@@ -595,18 +608,23 @@ function mountText(body, widget) {
   const bag = [];
   const settings = widget.settings;
   const root = h('div', 'plaque text-card');
-  if (settings.eyebrow) root.append(h('div', 'eyebrow', settings.eyebrow));
+  if (settings.eyebrow) root.append(piece('eyebrow', settings.eyebrow, settings.type, 'small'));
   const grow = h('div', 'grow');
   const block = h('div', 'text-fit');
   if (settings.title) {
-    const title = h('div', 'text-title', settings.title);
+    const title = piece('text-title', settings.title, settings.type, 'title');
     title.dir = 'auto';
     block.append(title);
   }
   if (settings.body) {
-    const copy = h('div', 'text-body');
+    const copy = piece('text-body', '', settings.type, 'body');
     copy.dir = 'auto';
+    const useParas = Boolean(settings.type?.parts?.body?.para);
     String(settings.body).split('\n').forEach((line, index) => {
+      if (useParas) {
+        copy.append(h('div', 'para-block', line));
+        return;
+      }
       if (index) copy.append(document.createElement('br'));
       copy.append(document.createTextNode(line));
     });
@@ -615,7 +633,7 @@ function mountText(body, widget) {
   grow.append(block);
   root.append(grow);
   body.append(root);
-  watchFit(block, grow, bag, { max: 68 });
+  if (!fixedSize(settings.type)) watchFit(block, grow, bag, { max: 68 });
   return () => bag.forEach((fn) => fn());
 }
 
@@ -627,25 +645,28 @@ function mountZmanim(body, widget, ctx) {
   const paint = () => {
     const data = ctx.calendar.zmanim(ctx.now());
     root.replaceChildren();
-    root.append(h('div', 'eyebrow', settings.heading || 'Zmanim'));
-    if (data.afterSunset) root.append(h('div', 'quiet zman-note', 'After sunset, these are tomorrow'));
-    root.append(hebrewLine('zman-he', 'זְמַנִּים'));
+    root.append(piece('eyebrow', settings.heading || 'Zmanim', settings.type, 'small'));
+    if (data.afterSunset) root.append(piece('quiet zman-note', 'After sunset, these are tomorrow', settings.type, 'small'));
+    root.append(hebrewLine('zman-he', 'זְמַנִּים', settings.type, 'small'));
     const grow = h('div', 'grow');
     const list = h('ul', 'zman-list');
     const show = settings.show || {};
     for (const item of data.items) {
       if (show[item.key] === false) continue;
       const row = h('li', 'zman-row');
-      row.append(h('span', 'zman-label', item.label));
-      row.append(h('span', 'zman-time', item.time));
+      const label = h('span', 'zman-label', item.label);
+      const time = h('span', 'zman-time', item.time);
+      stylePart(label, settings.type, 'small');
+      stylePart(time, settings.type, 'title');
+      row.append(label, time);
       list.append(row);
     }
     grow.append(list);
     root.append(grow);
-    fitBox(list, grow, { max: 40 });
+    if (!fixedSize(settings.type)) fitBox(list, grow, { max: 40 });
   };
   paint();
-  const observer = new ResizeObserver(() => paint());
+  const observer = new ResizeObserver(() => { if (!fixedSize(settings.type)) paint(); });
   observer.observe(body);
   bag.push(() => observer.disconnect());
   every(30000, paint, bag);
@@ -715,28 +736,28 @@ export async function renderTakeover(host, takeover, ctx) {
   }
   const scrim = h('div', 'takeover-scrim');
   const copy = h('div', 'takeover-copy');
-  if (takeover.eyebrow) copy.append(h('div', 'eyebrow', takeover.eyebrow));
+  if (takeover.eyebrow) copy.append(piece('eyebrow', takeover.eyebrow, takeover.type, 'small'));
   const titleBox = h('div', 'title-box');
-  const title = h('div', 'title-fit', takeover.title || '');
+  const title = piece('title-fit', takeover.title || '', takeover.type, 'title');
   title.dir = 'auto';
   titleBox.append(title);
   copy.append(titleBox);
   copy.append(h('div', 'rule'));
   if (takeover.subtitle) {
-    const sub = h('div', 'takeover-sub', takeover.subtitle);
+    const sub = piece('takeover-sub', takeover.subtitle, takeover.type, 'body');
     sub.dir = 'auto';
     copy.append(sub);
   }
   if (takeover.details) {
-    const details = h('div', 'takeover-details', takeover.details);
+    const details = piece('takeover-details', takeover.details, takeover.type, 'small');
     details.dir = 'auto';
     copy.append(details);
   }
-  if (takeover.footer) copy.append(h('div', 'takeover-foot', takeover.footer));
+  if (takeover.footer) copy.append(piece('takeover-foot', takeover.footer, takeover.type, 'small'));
   root.append(scrim, copy);
   host.append(root);
   const bag = [];
-  watchFit(title, titleBox, bag);
+  if (!fixedSize(takeover.type)) watchFit(title, titleBox, bag);
   return () => {
     bag.forEach((fn) => fn());
     host.replaceChildren();

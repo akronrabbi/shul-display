@@ -7,22 +7,28 @@ html, body {
 .bezel {
   position: fixed;
   inset: 0;
-  padding: 1.6vmin;
+  overflow: hidden;
   background: #101a2c;
   color: #fffaf3;
 }
 
+.frame {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center center;
+}
+
 .stage {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   outline: 1px solid var(--frame, rgba(228, 210, 164, 0.42));
-  outline-offset: 0.55vmin;
+  outline-offset: -1px;
 }
 
 .takeover-slot {
   position: absolute;
-  inset: 1.6vmin;
+  inset: 0;
   z-index: 5;
 }
 

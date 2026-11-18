@@ -18,6 +18,10 @@ The screen in the editor is a live preview. The television changes when you save
 
 **Theme** is at the left, under the pieces (on a phone it is in that same row). Each television has its own theme. Warm Classic is the original look. Tap another card to preview it, then pick letters, a background, and an accent if you want. Text on a custom color switches to light or dark so it can still be read from across the room. Save to send that look to the television. A full-screen message uses the same theme.
 
+Each piece has **Text style**. You can change the font, size, weight, italics, color, alignment, and the space between lines, paragraphs, and letters. Big numbers, labels, and the main words can be styled apart. **Reset to theme** puts that piece back. **Auto fit** shrinks words into the box. **Fixed size** uses the percentage you choose.
+
+**Saved layouts** and **History** are in the menu. Save a named copy such as Regular week or Shabbos, and lock it if it should not be changed. Every online save keeps the previous board, up to the last 30. Restore puts one back, and that step is kept in History too. Undo and Redo are for changes you have not saved yet.
+
 **Export** downloads one JSON file with the layout and any pictures or PDFs you uploaded. **Import** puts that file back, including on another computer. **Load published layout** brings back the copy stored in this website's `config.json`.
 
 Under "Where the TV looks":
@@ -26,7 +30,9 @@ Under "Where the TV looks":
 - **Only this computer** ignores the online board.
 - **Only the published file** always uses `config.json` from the website.
 
-You can add more than one screen and turn on **Rotate the screens**. Each screen has its own pieces. The words are not copied when you add a screen.
+You can add more than one screen and turn on **Cycle through screens**. Each screen has its own pieces. The words are not copied when you add a screen. Cycling only happens when that box is on, and only if you have more than one screen.
+
+**Rotate design to fit screen** is separate. Use it when the television is a landscape screen mounted on its side and the computer itself cannot be set to portrait. Off leaves the design as designed. 90° right, 180°, and 90° left turn the design. The link for that TV includes the turn, for example `?rotate=90`.
 
 **Full-screen message** covers only the TV you are editing, for example a simcha in the social hall. Turn it on, then Save. You can also limit it to a start and end in Akron time. The wording already filled in is only a sample. Change it before you turn it on. Preview stays in the editor until you save with the message turned on.
 
@@ -61,6 +67,8 @@ GitHub Pages is deployed by `.github/workflows/pages.yml` on every push to `main
 https://akronrabbi.github.io/shul-display/
 
 ## Storage
+
+Named layouts and the last 30 online saves live in Neon tables `public.layouts` and `public.board_history`. Only a signed-in editor can read or change them. The television does not use those tables. The SQL is in `schema/archive.sql`.
 
 Save writes every television into one online board. The television reads that board on its own, about every 30 seconds, and changes the picture without reloading. A copy stays in this browser, so the last layout keeps showing if the network drops.
 

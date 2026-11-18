@@ -39,6 +39,8 @@ export function normalizeTv(tv, fallbackName) {
   next.name = next.name || fallbackName || 'Lobby';
   next.orientation = next.orientation === 'portrait' ? 'portrait' : 'landscape';
   next.cycleScreens = Boolean(next.cycleScreens);
+  const rotation = Number(next.rotation);
+  next.rotation = rotation === 90 || rotation === 180 || rotation === 270 ? rotation : 0;
   next.activeScreen = next.activeScreen || 0;
   if (!Array.isArray(next.screens) || !next.screens.length) {
     next.screens = [{ id: 'main', name: 'Main', duration: 30, widgets: [] }];
@@ -85,7 +87,37 @@ export function pickTv(config, param) {
 }
 
 export function tvPageUrl(tv) {
-  return `./index.html?tv=${encodeURIComponent(tv.id)}`;
+  const params = new URLSearchParams();
+  params.set('tv', tv.id);
+  const rotate = Number(tv?.rotation) || 0;
+  if (rotate === 90 || rotate === 180 || rotate === 270) params.set('rotate', String(rotate));
+  return `./index.html?${params}`;
+}
+
+// Layout size of the stage before CSS rotation. A 90 or 270 turn swaps the
+// box so container-query text sizes match a real portrait screen.
+export function frameSize(vw, vh, orientation, rotate) {
+  const turn = [90, 180, 270].includes(Number(rotate)) ? Number(rotate) : 0;
+  const swap = turn === 90 || turn === 270;
+  const design = orientation === 'portrait' ? 9 / 16 : 16 / 9;
+  const visual = swap ? 1 / design : design;
+  const width = Math.max(0, Number(vw) || 0);
+  const height = Math.max(0, Number(vh) || 0);
+  if (!width || !height) return { width: 0, height: 0, rotate: turn };
+  let visualW;
+  let visualH;
+  if (width / height > visual) {
+    visualH = height;
+    visualW = height * visual;
+  } else {
+    visualW = width;
+    visualH = width / visual;
+  }
+  return {
+    width: swap ? visualH : visualW,
+    height: swap ? visualW : visualH,
+    rotate: turn,
+  };
 }
 
 export function blankTv(name, id) {

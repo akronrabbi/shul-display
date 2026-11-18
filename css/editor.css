@@ -362,6 +362,51 @@ button:disabled { opacity: 0.45; cursor: default; }
   border-color: var(--navy);
 }
 
+.rotate-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 15px;
+}
+
+.rotate-control select {
+  min-height: 44px;
+  font-size: 16px;
+  border: 1px solid #c4b49a;
+  background: #fffaf3;
+  padding: 8px 10px;
+}
+
+.rotate-hint {
+  margin: 0;
+  max-width: 34em;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.type-panel { margin-top: 8px; }
+.type-part {
+  border-top: 1px solid rgba(36, 28, 22, 0.1);
+  padding: 6px 0;
+}
+.type-part summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+.size-row { display: flex; gap: 8px; align-items: center; }
+.size-row input[type="range"] { flex: 1; height: 44px; }
+.size-row input[type="number"] { width: 5.2em; min-height: 44px; font-size: 16px; }
+
+.archive-card {
+  border-top: 1px solid rgba(36, 28, 22, 0.12);
+  padding: 10px 0;
+}
+.archive-card .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.archive-card .btn { min-height: 44px; }
+
 .color-row input[type="color"] {
   width: 64px;
   height: 44px;
@@ -587,6 +632,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   .board-frame { display: block; height: auto; }
   .segment button, .tab, .mobile-only { min-height: 44px; font-size: 16px; }
   .status { margin-left: 0; width: 100%; }
+  .inspector-body > .side-title:first-child { display: none; }
   .signin, .who { margin: 8px 12px; flex-direction: column; align-items: stretch; }
   .signin-actions, .who { align-items: stretch; }
   .signin-actions .btn, .who .btn, .signin input { width: 100%; }

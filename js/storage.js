@@ -1,6 +1,20 @@
 // Storage seam. The online board is public.boards id "main".
 // This browser keeps a copy so the television still shows something offline.
-import { anonymousToken, boardHasLayout, readBoard, uploadMedia, writeBoard } from './cloud.js';
+import {
+  anonymousToken,
+  boardHasLayout,
+  listHistory,
+  listLayouts,
+  patchLayout,
+  pushHistory,
+  readBoard,
+  readHistory,
+  readLayout,
+  removeLayout,
+  uploadMedia,
+  writeBoard,
+  writeLayout,
+} from './cloud.js';
 
 const CONFIG_KEY = 'shul-display-config-v1';
 const SOURCE_KEY = 'shul-display-source-v1';
@@ -170,11 +184,23 @@ export function createStorage(options = {}) {
       try { localStorage.setItem('shul-display-updated-at', row.updated_at || ''); } catch { /* ignore */ }
       return { config: row.config, updated_at: row.updated_at };
     },
-    async saveOnline(config) {
-      const clean = stripAssets(config);
+    async withToken() {
       let token = null;
       try { token = await getToken(); } catch { token = null; }
       if (!token) return { ok: false, reason: 'signed-out' };
+      return { ok: true, token };
+    },
+    async saveOnline(config) {
+      const clean = stripAssets(config);
+      const auth = await this.withToken();
+      if (!auth.ok) return auth;
+      const token = auth.token;
+      try {
+        const previous = await readBoard(token);
+        if (previous && JSON.stringify(previous.config) !== JSON.stringify(clean)) {
+          await pushHistory(token, previous.config);
+        }
+      } catch { /* history must not block the save */ }
       const result = await writeBoard(token, clean);
       if (result.ok) {
         this.saveLocal(clean);
@@ -182,6 +208,13 @@ export function createStorage(options = {}) {
       }
       return result;
     },
+    listLayouts() { return this.withToken().then((auth) => (auth.ok ? listLayouts(auth.token) : auth)); },
+    readLayout(id) { return this.withToken().then((auth) => (auth.ok ? readLayout(auth.token, id) : auth)); },
+    writeLayout(layout) { return this.withToken().then((auth) => (auth.ok ? writeLayout(auth.token, layout) : auth)); },
+    patchLayout(id, patch) { return this.withToken().then((auth) => (auth.ok ? patchLayout(auth.token, id, patch) : auth)); },
+    removeLayout(id) { return this.withToken().then((auth) => (auth.ok ? removeLayout(auth.token, id) : auth)); },
+    listHistory() { return this.withToken().then((auth) => (auth.ok ? listHistory(auth.token) : auth)); },
+    readHistory(id) { return this.withToken().then((auth) => (auth.ok ? readHistory(auth.token, id) : auth)); },
     async upload(file) {
       const token = await getToken();
       if (!token) throw new Error('Sign in before you add pictures or flyers.');

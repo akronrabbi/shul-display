@@ -71,7 +71,7 @@
 .eyebrow {
   font-family: var(--sans);
   font-weight: 600;
-  font-size: 4.1cqh;
+  font-size: calc(4.1cqh * var(--t-scale, 1));
   letter-spacing: 0.22em;
   text-transform: uppercase;
   line-height: 1.2;
@@ -89,7 +89,7 @@
 .clock {
   font-family: var(--serif);
   font-weight: 560;
-  font-size: 16cqh;
+  font-size: calc(16cqh * var(--t-scale, 1));
   letter-spacing: -0.03em;
   line-height: 0.95;
   font-variant-numeric: tabular-nums;
@@ -98,7 +98,7 @@
 .weekday {
   font-family: var(--serif);
   font-weight: 560;
-  font-size: 7.2cqh;
+  font-size: calc(7.2cqh * var(--t-scale, 1));
   line-height: 1.05;
 }
 
@@ -106,7 +106,7 @@
 .translit,
 .time-when,
 .quiet {
-  font-size: 4.6cqh;
+  font-size: calc(4.6cqh * var(--t-scale, 1));
   line-height: 1.25;
 }
 
@@ -122,13 +122,13 @@
 .tone-band .quiet { color: var(--accent-muted, rgba(248, 237, 214, 0.78)); }
 
 .date-card { justify-content: center; }
-.date-he { font-size: 9cqh; font-weight: 600; }
+.date-he { font-size: calc(9cqh * var(--t-scale, 1)); font-weight: 600; }
 .parsha-en {
   font-family: var(--serif);
-  font-size: 5.4cqh;
+  font-size: calc(5.4cqh * var(--t-scale, 1));
   font-weight: 560;
 }
-.parsha-he { font-size: 5.6cqh; }
+.parsha-he { font-size: calc(5.6cqh * var(--t-scale, 1)); }
 .hebrew-line { text-align: left; direction: ltr; }
 .hebrew-line bdi {
   font-family: var(--hebrew);
@@ -137,8 +137,8 @@
   line-height: 1.45;
 }
 
-.shabbos-card .parsha-en { margin-top: 0; font-size: 6.2cqh; }
-.shabbos-card .parsha-he { font-size: 5.6cqh; }
+.shabbos-card .parsha-en { margin-top: 0; font-size: calc(6.2cqh * var(--t-scale, 1)); }
+.shabbos-card .parsha-he { font-size: calc(5.6cqh * var(--t-scale, 1)); }
 
 .shabbos-times {
   margin-top: auto;
@@ -148,7 +148,7 @@
 
 .time-block { flex: 1; min-width: 0; }
 .time-label {
-  font-size: 3.6cqh;
+  font-size: calc(3.6cqh * var(--t-scale, 1));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-weight: 600;
@@ -157,16 +157,16 @@
 .time-value {
   font-family: var(--serif);
   font-weight: 560;
-  font-size: 12.5cqh;
+  font-size: calc(12.5cqh * var(--t-scale, 1));
   line-height: 1;
   font-variant-numeric: tabular-nums;
   margin: 0.6cqh 0 0.4cqh;
 }
-.time-when { font-size: 3.8cqh; }
+.time-when { font-size: calc(3.8cqh * var(--t-scale, 1)); }
 
 @container (max-width: 420px) {
   .shabbos-times { flex-direction: column; gap: 2cqh; }
-  .time-value { font-size: 10cqh; }
+  .time-value { font-size: calc(10cqh * var(--t-scale, 1)); }
 }
 
 .logo-card {
@@ -190,12 +190,12 @@
 .logo-name {
   font-family: var(--serif);
   font-weight: 560;
-  font-size: 8cqh;
+  font-size: calc(8cqh * var(--t-scale, 1));
   line-height: 1.05;
 }
 
 .logo-sub {
-  font-size: 4.2cqh;
+  font-size: calc(4.2cqh * var(--t-scale, 1));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   opacity: 0.8;
@@ -240,7 +240,7 @@
   padding-inline: 5cqi;
   font-family: var(--serif);
   font-weight: 520;
-  font-size: 46cqh;
+  font-size: calc(46cqh * var(--t-scale, 1));
   white-space: nowrap;
 }
 
@@ -301,7 +301,7 @@
   text-align: center;
   padding: 8%;
   font-family: var(--serif);
-  font-size: 5.5cqh;
+  font-size: calc(5.5cqh * var(--t-scale, 1));
   opacity: 0.8;
 }
 
@@ -325,31 +325,31 @@
 
 .event-when { text-align: center; }
 .event-dow {
-  font-size: 0.62em;
+  font-size: calc(0.62em * var(--t-scale, 1));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 700;
 }
 .event-day {
   font-family: var(--serif);
-  font-size: 1.55em;
+  font-size: calc(1.55em * var(--t-scale, 1));
   line-height: 0.9;
   font-weight: 560;
 }
 .event-month {
-  font-size: 0.62em;
+  font-size: calc(0.62em * var(--t-scale, 1));
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .event-title {
   font-family: var(--serif);
-  font-size: 1.15em;
+  font-size: calc(1.15em * var(--t-scale, 1));
   font-weight: 560;
   line-height: 1.1;
 }
 .event-meta {
   margin-top: 0.18em;
-  font-size: 0.68em;
+  font-size: calc(0.68em * var(--t-scale, 1));
   opacity: 0.78;
 }
 
@@ -361,13 +361,13 @@
 .text-title {
   font-family: var(--serif);
   font-weight: 560;
-  font-size: 1.35em;
+  font-size: calc(1.35em * var(--t-scale, 1));
   line-height: 1.05;
 }
-.text-body { font-size: 0.72em; line-height: 1.35; white-space: normal; }
+.text-body { font-size: calc(0.72em * var(--t-scale, 1)); line-height: 1.35; white-space: normal; }
 
-.zman-he { font-size: 5cqh; opacity: 0.85; }
-.zman-note { font-size: 3.4cqh; }
+.zman-he { font-size: calc(5cqh * var(--t-scale, 1)); opacity: 0.85; }
+.zman-note { font-size: calc(3.4cqh * var(--t-scale, 1)); }
 .zman-list { list-style: none; margin: 0; padding: 0; }
 .zman-row {
   display: flex;
@@ -376,11 +376,11 @@
   padding: 0.18em 0;
   border-bottom: 1px solid var(--line-strong, rgba(228, 210, 164, 0.16));
 }
-.zman-label { font-size: 0.72em; }
+.zman-label { font-size: calc(0.72em * var(--t-scale, 1)); }
 .zman-time {
   font-family: var(--serif);
   font-variant-numeric: tabular-nums;
-  font-size: 0.95em;
+  font-size: calc(0.95em * var(--t-scale, 1));
 }
 
 .takeover {
@@ -434,7 +434,7 @@
   gap: 1.4cqh;
 }
 
-.takeover .eyebrow { font-size: 2.6cqh; }
+.takeover .eyebrow { font-size: calc(2.6cqh * var(--t-scale, 1)); }
 .title-box {
   width: 100%;
   height: 24cqh;
@@ -452,18 +452,32 @@
 .takeover-burgundy .rule { background: var(--rule-on-accent, #e4d2a4); }
 .takeover-sub {
   font-family: var(--serif);
-  font-size: 4.6cqh;
+  font-size: calc(4.6cqh * var(--t-scale, 1));
   font-weight: 520;
 }
-.takeover-details { font-size: 3.2cqh; letter-spacing: 0.04em; }
+.takeover-details { font-size: calc(3.2cqh * var(--t-scale, 1)); letter-spacing: 0.04em; }
 .takeover-foot {
   margin-top: 1cqh;
-  font-size: 2.4cqh;
+  font-size: calc(2.4cqh * var(--t-scale, 1));
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--rule, #e4d2a4);
 }
 .takeover-burgundy .takeover-foot { color: var(--rule-on-accent, #e4d2a4); }
+
+.typed bdi { font-family: var(--t-hebrew, var(--hebrew)); }
+.para-block + .para-block { margin-top: var(--t-para, 0.35em); }
+.caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 0.35em 0.7em;
+  font-size: calc(3.2cqh * var(--t-scale, 1));
+  background: color-mix(in srgb, var(--bg, #101a2c) 62%, transparent);
+  color: var(--stage-ink, #fffaf3);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .welcome-track { animation: none; }

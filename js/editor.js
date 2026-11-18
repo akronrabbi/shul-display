@@ -2,6 +2,7 @@ import { createCalendar } from './calendar.js';
 import { authReady, currentUser, editorToken, sendEmailCode, signInWithCode, signInWithGoogle, signOut } from './auth.js';
 import { blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { FONT_PAIRINGS, PRESETS, applyTheme, normalizeTheme, resolveTheme } from './themes.js';
+import { TEXT_FONTS, TYPE_PARTS, setFit, setPart } from './type.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { explainDriveError, listDriveFolderImages } from './drive.js';
@@ -66,10 +67,71 @@ function dirty() {
   return JSON.stringify(state) !== savedJson;
 }
 
+const undoPast = [];
+const undoFuture = [];
+let undoTimer = 0;
+let undoLock = false;
+
+function paintUndo() {
+  const undo = document.getElementById('undo');
+  const redo = document.getElementById('redo');
+  if (undo) undo.disabled = undoPast.length < 2;
+  if (redo) redo.disabled = !undoFuture.length;
+}
+
+function commitUndo() {
+  if (undoLock) return;
+  const snap = JSON.stringify(state);
+  if (undoPast[undoPast.length - 1] === snap) return;
+  undoPast.push(snap);
+  if (undoPast.length > 60) undoPast.shift();
+  undoFuture.length = 0;
+  paintUndo();
+}
+
+function seedUndo() {
+  undoPast.length = 0;
+  undoFuture.length = 0;
+  undoPast.push(JSON.stringify(state));
+  paintUndo();
+}
+
+function showSnapshot(json) {
+  undoLock = true;
+  state = normalize(JSON.parse(json));
+  selectedId = null;
+  previewTakeover = false;
+  mode = 'screen';
+  paintChrome();
+  renderCanvas();
+  buildInspector();
+  status.textContent = dirty() ? 'Not saved yet' : 'All changes are saved';
+  undoLock = false;
+  paintUndo();
+}
+
+function undo() {
+  clearTimeout(undoTimer);
+  commitUndo();
+  if (undoPast.length < 2) return;
+  undoFuture.push(undoPast.pop());
+  showSnapshot(undoPast[undoPast.length - 1]);
+}
+
+function redo() {
+  if (!undoFuture.length) return;
+  const next = undoFuture.pop();
+  undoPast.push(next);
+  showSnapshot(next);
+}
+
 function markDirty() {
   if (dirty()) status.textContent = 'Not saved yet';
   else if (!hasLocal) status.textContent = 'Published layout. Press Save to put it online.';
   else status.textContent = 'All changes are saved';
+  if (undoLock) return;
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(commitUndo, 400);
 }
 
 function clampRaw(place) {
@@ -299,11 +361,13 @@ function isPhone() {
 }
 
 function syncSheet() {
-  const open = isPhone() && (Boolean(selectedId) || mode === 'takeover' || mode === 'theme' || document.body.dataset.sheet === 'screen');
+  const open = isPhone() && (Boolean(selectedId) || mode === 'takeover' || mode === 'theme' || mode === 'layouts' || mode === 'history' || document.body.dataset.sheet === 'screen');
   document.body.classList.toggle('sheet-open', open);
   const title = document.getElementById('sheet-title');
   if (!title) return;
   if (mode === 'theme') title.textContent = 'Theme';
+  else if (mode === 'layouts') title.textContent = 'Saved layouts';
+  else if (mode === 'history') title.textContent = 'History';
   else if (mode === 'takeover') title.textContent = 'Full-screen message';
   else if (selectedId) {
     const widget = findWidget(selectedId);
@@ -520,6 +584,10 @@ function buildInspector() {
     syncSheet();
     return;
   }
+  if (mode === 'layouts' || mode === 'history') {
+    buildInspectorArchive();
+    return;
+  }
   if (mode === 'takeover') {
     buildTakeoverForm();
     syncSheet();
@@ -626,11 +694,22 @@ function buildInspector() {
     });
   }
 
+  if (widget.type === 'date') {
+    inspector.append(field('Small label', textInput(settings.kicker || 'Today', (value) => { settings.kicker = value; })));
+  }
+  if (widget.type === 'shabbos') {
+    inspector.append(field('Candle lighting label', textInput(settings.candleLabel || 'Candle lighting', (value) => { settings.candleLabel = value; })));
+    inspector.append(field('Havdalah label', textInput(settings.havdalahLabel || 'Havdalah', (value) => { settings.havdalahLabel = value; })));
+  }
+  if (widget.type === 'photos' || widget.type === 'pdf') {
+    inspector.append(field('Caption', textInput(settings.caption || '', (value) => { settings.caption = value; })));
+  }
   if (widget.type !== 'welcome') {
     inspector.append(field('Color', selectInput(settings.tone, toneChoices(widget.type), (value) => { settings.tone = value; })));
   } else {
     inspector.append(field('Color', selectInput(settings.tone, toneChoices('welcome'), (value) => { settings.tone = value; })));
   }
+  appendTypePanel(settings, TYPE_PARTS[widget.type] || [], () => refreshWidget(widget.id));
 
   const order = el('div', 'row-actions');
   order.append(actionButton('Bring forward', () => reorder(widget.id, 1)));
@@ -843,7 +922,7 @@ function buildPdfForm(settings) {
 function buildScreenForm() {
   const current = screen();
   inspector.append(el('h2', 'side-title', 'This screen'));
-  inspector.append(el('p', 'hint', 'This is the board the TV will show. Add pieces from the left. You can make more than one screen and let them rotate.'));
+  inspector.append(el('p', 'hint', 'This is the board the TV will show. Add pieces from the left. You can make more than one screen and cycle through them.'));
   const name = document.createElement('input');
   name.type = 'text';
   name.value = current.name || '';
@@ -856,7 +935,142 @@ function buildScreenForm() {
   inspector.append(field('Seconds before the next screen', numberInput(current.duration, (value) => {
     current.duration = Math.max(5, Number(value) || 5);
   })));
-  inspector.append(el('p', 'note', 'Rotation only happens when "Rotate the screens" is on, and only if you have more than one screen.'));
+  inspector.append(el('p', 'note', 'Cycling only happens when "Cycle through screens" is on, and only if you have more than one screen.'));
+}
+
+function appendTypePanel(target, parts, refresh) {
+  const box = el('div', 'type-panel');
+  box.append(el('h2', 'side-title', 'Text style'));
+  box.append(el('p', 'hint', 'Leave a choice on Theme default to keep the look of this television. Auto fit shrinks the words to the box. Fixed size uses the percentage you set.'));
+  const fitRow = el('div', 'ground-row');
+  const fit = target.type?.fit === 'fixed' ? 'fixed' : 'auto';
+  [['auto', 'Auto fit'], ['fixed', 'Fixed size']].forEach(([value, label]) => {
+    const button = el('button', value === fit ? 'on' : '', label);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      setFit(target, value);
+      markDirty();
+      refresh();
+      buildInspector();
+    });
+    fitRow.append(button);
+  });
+  box.append(fitRow);
+  parts.forEach((part) => {
+    const details = document.createElement('details');
+    details.className = 'type-part';
+    if (part.open) details.open = true;
+    const summary = document.createElement('summary');
+    summary.textContent = part.label;
+    details.append(summary);
+    const style = target.type?.parts?.[part.id] || {};
+    const fonts = TEXT_FONTS.map((item) => [item.id, item.label]);
+    details.append(field('Font', selectInput(style.font || 'theme', fonts, (value) => {
+      setPart(target, part.id, { font: value === 'theme' ? '' : value });
+      markDirty();
+      refresh();
+    })));
+    const sizeRow = el('div', 'size-row');
+    const scale = Number(style.size) || 100;
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = '60';
+    range.max = '180';
+    range.step = '5';
+    range.value = String(scale);
+    range.setAttribute('aria-label', `${part.label} size`);
+    const number = document.createElement('input');
+    number.type = 'number';
+    number.min = '60';
+    number.max = '180';
+    number.step = '5';
+    number.value = String(scale);
+    number.setAttribute('aria-label', `${part.label} size percent`);
+    const applySize = (value) => {
+      const next = Math.max(60, Math.min(180, Number(value) || 100));
+      range.value = String(next);
+      number.value = String(next);
+      setPart(target, part.id, { size: next });
+      markDirty();
+      refresh();
+    };
+    range.addEventListener('input', () => applySize(range.value));
+    number.addEventListener('input', () => applySize(number.value));
+    sizeRow.append(range, number, el('span', '', '%'));
+    details.append(field('Text size', sizeRow));
+    details.append(field('Weight', selectInput(String(style.weight || ''), [['', 'Theme default'], ['500', 'Medium'], ['650', 'Semibold'], ['800', 'Bold']], (value) => {
+      setPart(target, part.id, { weight: value });
+      markDirty();
+      refresh();
+    })));
+    details.append(checkInput(Boolean(style.italic), 'Italic', (value) => {
+      setPart(target, part.id, { italic: value });
+      markDirty();
+      refresh();
+    }));
+    const colorRow = el('div', 'color-row');
+    const color = document.createElement('input');
+    color.type = 'color';
+    color.value = style.color || '#241c16';
+    color.setAttribute('aria-label', `${part.label} color`);
+    color.addEventListener('input', () => {
+      setPart(target, part.id, { color: color.value });
+      markDirty();
+      refresh();
+    });
+    colorRow.append(color);
+    const clear = el('button', 'btn', 'Theme color');
+    clear.type = 'button';
+    clear.addEventListener('click', () => {
+      setPart(target, part.id, { color: '' });
+      markDirty();
+      refresh();
+      buildInspector();
+    });
+    colorRow.append(clear);
+    details.append(field('Text color', colorRow));
+    const alignRow = el('div', 'ground-row');
+    [['', 'Theme'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']].forEach(([value, label]) => {
+      const button = el('button', (style.align || '') === value ? 'on' : '', label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        setPart(target, part.id, { align: value });
+        markDirty();
+        refresh();
+        buildInspector();
+      });
+      alignRow.append(button);
+    });
+    details.append(field('Alignment', alignRow));
+    details.append(field('Line spacing', numberInput(style.line || '', (value) => {
+      setPart(target, part.id, { line: value === '' ? '' : Number(value) });
+      refresh();
+    })));
+    details.append(field('Paragraph spacing', numberInput(style.para || '', (value) => {
+      setPart(target, part.id, { para: value === '' ? '' : Number(value) });
+      refresh();
+    })));
+    details.append(field('Letter spacing', numberInput(style.track || '', (value) => {
+      setPart(target, part.id, { track: value === '' ? '' : Number(value) });
+      refresh();
+    })));
+    details.append(field('Case', selectInput(style.case || '', [['', 'Normal'], ['upper', 'Uppercase']], (value) => {
+      setPart(target, part.id, { case: value });
+      markDirty();
+      refresh();
+    })));
+    box.append(details);
+  });
+  const reset = el('button', 'btn', 'Reset to theme');
+  reset.type = 'button';
+  reset.addEventListener('click', () => {
+    delete target.type;
+    markDirty();
+    refresh();
+    buildInspector();
+  });
+  box.append(reset);
+  inspector.append(box);
 }
 
 function buildTakeoverForm() {
@@ -909,6 +1123,7 @@ function buildTakeoverForm() {
   });
   inspector.append(preview);
   inspector.append(el('p', 'note', 'Preview stays on this page. The TV changes only after you turn the message on and press Save.'));
+  appendTypePanel(takeover, TYPE_PARTS.takeover, () => { if (previewTakeover) renderCanvas(); });
 }
 
 function reorder(id, direction) {
@@ -1033,6 +1248,8 @@ function paintChrome() {
   document.getElementById('orient-land').classList.toggle('on', tv().orientation === 'landscape');
   document.getElementById('orient-port').classList.toggle('on', tv().orientation === 'portrait');
   document.getElementById('cycle').checked = Boolean(tv().cycleScreens);
+  const rotate = document.getElementById('tv-rotate');
+  if (rotate && document.activeElement !== rotate) rotate.value = String(tv().rotation || 0);
   tabs.replaceChildren();
   tv().screens.forEach((item, index) => {
     const button = el('button', `tab${index === tv().activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
@@ -1281,6 +1498,15 @@ function bindChrome() {
     tv().cycleScreens = event.target.checked;
     markDirty();
   });
+  document.getElementById('tv-rotate').addEventListener('change', (event) => {
+    tv().rotation = Number(event.target.value) || 0;
+    markDirty();
+    paintTvBar();
+  });
+  document.getElementById('undo').addEventListener('click', undo);
+  document.getElementById('redo').addEventListener('click', redo);
+  document.getElementById('layouts').addEventListener('click', () => openArchive('layouts'));
+  document.getElementById('history').addEventListener('click', () => openArchive('history'));
   document.getElementById('reload-published').addEventListener('click', async () => {
     const published = await storage.loadPublished();
     if (!published) {
@@ -1430,6 +1656,186 @@ function wireAuth() {
   });
 }
 
+function archiveNote(result, fallback) {
+  if (result?.reason === 'signed-out') return 'Sign in to use saved layouts.';
+  if (result?.reason === 'not-editor') return 'That sign-in is not an editor.';
+  if (result?.reason === 'locked') return 'That layout is locked. Unlock it first.';
+  return result?.message || fallback;
+}
+
+function stamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function replaceActiveTv(saved) {
+  const source = normalize(saved);
+  const incoming = source.tvs.find((item) => item.id === tv().id) || source.tvs[state.activeTv] || source.tvs[0];
+  if (!incoming) return;
+  const current = tv();
+  const id = current.id;
+  Object.assign(current, incoming, { id });
+}
+
+async function keepOnline(next) {
+  state = normalize(next);
+  const result = await storage.saveOnline(state);
+  if (!result.ok) {
+    status.textContent = archiveNote(result, 'Could not save online.');
+    return false;
+  }
+  savedJson = JSON.stringify(state);
+  hasLocal = true;
+  seedUndo();
+  paintChrome();
+  renderCanvas();
+  buildInspector();
+  status.textContent = 'Saved online.';
+  return true;
+}
+
+function openArchive(kind) {
+  mode = kind;
+  selectedId = null;
+  previewTakeover = false;
+  document.body.classList.remove('menu-open');
+  buildInspector();
+}
+
+async function buildLayouts() {
+  inspector.replaceChildren(el('h2', 'side-title', 'Saved layouts'));
+  syncSheet();
+  inspector.append(el('p', 'hint', 'Keep a copy you can come back to. History also keeps the last 30 online saves.'));
+  const saveAs = el('button', 'btn btn-primary', 'Save as layout...');
+  saveAs.type = 'button';
+  saveAs.addEventListener('click', async () => {
+    const name = window.prompt('Name this layout', 'Regular week');
+    if (!name || !name.trim()) return;
+    const result = await storage.writeLayout({
+      id: crypto.randomUUID(),
+      name: name.trim().slice(0, 80),
+      config: state,
+      locked: false,
+    });
+    status.textContent = result.ok ? `Saved the layout "${name.trim()}".` : archiveNote(result, 'Could not save that layout.');
+    if (result.ok) buildLayouts();
+  });
+  inspector.append(saveAs);
+  const listed = await storage.listLayouts();
+  if (!listed.ok) {
+    inspector.append(el('p', 'note', archiveNote(listed, 'Could not load layouts.')));
+    syncSheet();
+    return;
+  }
+  if (!listed.rows.length) inspector.append(el('p', 'note', 'No saved layouts yet.'));
+  listed.rows.forEach((row) => {
+    const card = el('div', 'archive-card');
+    card.append(el('strong', '', row.name));
+    card.append(el('p', 'note', `${stamp(row.updated_at)}${row.updated_by ? `  -  ${row.updated_by}` : ''}${row.locked ? '  -  Locked' : ''}`));
+    const rowActions = el('div', 'row-actions');
+    rowActions.append(actionButton('Every TV', async () => {
+      if (!window.confirm(`Replace every TV with "${row.name}"? The current board is kept in History.`)) return;
+      const full = await storage.readLayout(row.id);
+      if (!full.ok || !full.rows[0]) {
+        status.textContent = archiveNote(full, 'Could not open that layout.');
+        return;
+      }
+      if (await keepOnline(full.rows[0].config)) status.textContent = `Restored "${row.name}".`;
+    }));
+    rowActions.append(actionButton('This TV only', async () => {
+      if (!window.confirm(`Replace only this TV with the one from "${row.name}"? The other TVs stay as they are. The current board is kept in History.`)) return;
+      const full = await storage.readLayout(row.id);
+      if (!full.ok || !full.rows[0]) {
+        status.textContent = archiveNote(full, 'Could not open that layout.');
+        return;
+      }
+      const next = structuredClone(state);
+      state = next;
+      replaceActiveTv(full.rows[0].config);
+      if (await keepOnline(state)) status.textContent = `Restored this TV from "${row.name}".`;
+    }));
+    rowActions.append(actionButton('Rename', async () => {
+      if (row.locked) {
+        status.textContent = 'That layout is locked. Unlock it first.';
+        return;
+      }
+      const name = window.prompt('New name', row.name);
+      if (!name || !name.trim()) return;
+      const result = await storage.patchLayout(row.id, { name: name.trim().slice(0, 80) });
+      status.textContent = result.ok ? 'Renamed.' : archiveNote(result, 'Could not rename that layout.');
+      if (result.ok) buildLayouts();
+    }));
+    rowActions.append(actionButton(row.locked ? 'Unlock' : 'Lock', async () => {
+      const result = await storage.patchLayout(row.id, { locked: !row.locked });
+      status.textContent = result.ok ? (row.locked ? 'Unlocked.' : 'Locked.') : archiveNote(result, 'Could not change the lock.');
+      if (result.ok) buildLayouts();
+    }));
+    rowActions.append(actionButton('Delete', async () => {
+      if (row.locked) {
+        status.textContent = 'That layout is locked. Unlock it first.';
+        return;
+      }
+      if (!window.confirm(`Delete the layout "${row.name}"? This cannot be undone.`)) return;
+      const result = await storage.removeLayout(row.id);
+      status.textContent = result.ok ? 'Deleted.' : archiveNote(result, 'Could not delete that layout.');
+      if (result.ok) buildLayouts();
+    }));
+    card.append(rowActions);
+    inspector.append(card);
+  });
+  syncSheet();
+}
+
+async function buildHistory() {
+  inspector.replaceChildren(el('h2', 'side-title', 'History'));
+  syncSheet();
+  inspector.append(el('p', 'hint', 'Each online save keeps the previous board. The last 30 are here. Restoring keeps today in this list, so you can undo it.'));
+  const listed = await storage.listHistory();
+  if (!listed.ok) {
+    inspector.append(el('p', 'note', archiveNote(listed, 'Could not load history.')));
+    syncSheet();
+    return;
+  }
+  if (!listed.rows.length) inspector.append(el('p', 'note', 'No earlier saves yet. Press Save once more and the previous board will show up here.'));
+  listed.rows.forEach((row) => {
+    const card = el('div', 'archive-card');
+    card.append(el('strong', '', stamp(row.saved_at) || 'Saved'));
+    card.append(el('p', 'note', row.saved_by || 'Editor'));
+    const rowActions = el('div', 'row-actions');
+    rowActions.append(actionButton('Preview', async () => {
+      const full = await storage.readHistory(row.id);
+      if (!full.ok || !full.rows[0]) {
+        status.textContent = archiveNote(full, 'Could not open that version.');
+        return;
+      }
+      clearTimeout(undoTimer);
+      commitUndo();
+      state = normalize(full.rows[0].config);
+      paintChrome();
+      renderCanvas();
+      status.textContent = 'Previewing a past version. Press History, then Restore, to keep it. Undo goes back.';
+    }));
+    rowActions.append(actionButton('Restore', async () => {
+      if (!window.confirm('Put this past version back on every TV? Today\'s board is kept in History so you can return.')) return;
+      const full = await storage.readHistory(row.id);
+      if (!full.ok || !full.rows[0]) {
+        status.textContent = archiveNote(full, 'Could not open that version.');
+        return;
+      }
+      if (await keepOnline(full.rows[0].config)) status.textContent = 'Restored that version.';
+    }));
+    card.append(rowActions);
+    inspector.append(card);
+  });
+  syncSheet();
+}
+
+function buildInspectorArchive() {
+  if (mode === 'layouts') buildLayouts();
+  else buildHistory();
+}
+
 async function init() {
   wireAuth();
   refreshAuth();
@@ -1451,6 +1857,7 @@ async function init() {
   paintChrome();
   buildInspector();
   await renderCanvas();
+  seedUndo();
   markDirty();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
   window.__ready = true;

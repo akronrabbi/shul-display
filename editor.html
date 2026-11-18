@@ -6,7 +6,7 @@
   <title>Edit the lobby display - Anshe Sfard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Frank+Ruhl+Libre:wght@500;700&family=Libre+Baskerville:wght@400;700&family=Manrope:wght@500;600;700&family=Noto+Sans+Hebrew:wght@500;600;700&family=Noto+Serif+Hebrew:wght@500;600;700&family=Nunito:wght@500;600;700&family=Outfit:wght@500;600;700&family=Rubik:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Frank+Ruhl+Libre:wght@500;700&family=Libre+Baskerville:wght@400;700&family=Manrope:wght@500;600;700&family=Noto+Sans+Hebrew:wght@500;600;700&family=Noto+Serif+Hebrew:wght@500;600;700&family=Nunito:wght@500;600;700&family=Outfit:wght@500;600;700&family=Rubik:wght@500;600;700&family=Assistant:wght@500;600;700&family=Heebo:wght@500;600;700&family=Literata:opsz,wght@7..72,500;7..72,700&family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Spectral:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/theme.css">
   <link rel="stylesheet" href="./css/widgets.css">
   <link rel="stylesheet" href="./css/editor.css">
@@ -23,6 +23,10 @@
         <button type="button" class="btn" id="reload-published">Load published layout</button>
         <button type="button" class="btn" id="import">Import</button>
         <button type="button" class="btn" id="export">Export</button>
+        <button type="button" class="btn" id="undo">Undo</button>
+        <button type="button" class="btn" id="redo">Redo</button>
+        <button type="button" class="btn" id="layouts">Saved layouts</button>
+        <button type="button" class="btn" id="history">History</button>
         <button type="button" class="btn" id="open-tv">Open the TV</button>
         <input id="import-file" type="file" accept="application/json,.json" hidden>
       </div>
@@ -61,6 +65,15 @@
     <select id="tv-select" class="tv-select" aria-label="Which TV"></select>
     <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
     <label class="tv-name-label">Name <input id="tv-name" type="text" maxlength="40" aria-label="TV name"></label>
+    <label class="rotate-control">Rotate design to fit screen
+      <select id="tv-rotate" aria-label="Rotate design to fit screen">
+        <option value="0">Off</option>
+        <option value="90">90° right</option>
+        <option value="180">180°</option>
+        <option value="270">90° left</option>
+      </select>
+    </label>
+    <p class="rotate-hint">Turns the design on the TV to match a screen mounted sideways. It does not move the screen itself.</p>
     <div class="tv-address">
       <span>Address</span>
       <code id="tv-url"></code>
@@ -77,7 +90,7 @@
           <button type="button" id="orient-port">Portrait</button>
         </div>
         <div class="tabs" id="tabs"></div>
-        <label class="choice"><input type="checkbox" id="cycle"> Rotate the screens</label>
+        <label class="choice"><input type="checkbox" id="cycle"> Cycle through screens</label>
         <button type="button" class="btn mobile-only" id="screen-settings">Screen settings</button>
         <div class="status" id="status"></div>
       </div>

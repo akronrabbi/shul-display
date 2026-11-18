@@ -67,6 +67,96 @@ export async function writeBoard(token, config) {
   return { ok: true, updated_at: rows[0].updated_at, updated_by: rows[0].updated_by };
 }
 
+function authHeaders(token, prefer) {
+  return {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Prefer: prefer || 'return=representation',
+  };
+}
+
+async function dataResult(response, { allowEmpty = false } = {}) {
+  let body = null;
+  try { body = await response.json(); } catch { body = null; }
+  if (response.status === 401) return { ok: false, reason: 'signed-out', rows: [] };
+  if (response.status === 403) return { ok: false, reason: 'not-editor', rows: [] };
+  if (!response.ok) {
+    const message = body?.message || body?.error || 'The online board refused that.';
+    if (/locked/i.test(String(message))) return { ok: false, reason: 'locked', rows: [] };
+    return { ok: false, reason: 'error', message, rows: [] };
+  }
+  const rows = Array.isArray(body) ? body : [];
+  if (!rows.length && !allowEmpty && response.status !== 204) return { ok: false, reason: 'not-editor', rows: [] };
+  return { ok: true, rows };
+}
+
+export async function pushHistory(token, config) {
+  const response = await fetch(`${DATA_API}/board_history`, {
+    method: 'POST',
+    headers: authHeaders(token),
+    body: JSON.stringify({ config }),
+  });
+  return dataResult(response);
+}
+
+export async function listHistory(token) {
+  const response = await fetch(
+    `${DATA_API}/board_history?select=id,saved_at,saved_by&order=saved_at.desc,id.desc&limit=30`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return dataResult(response, { allowEmpty: true });
+}
+
+export async function readHistory(token, id) {
+  const response = await fetch(
+    `${DATA_API}/board_history?id=eq.${encodeURIComponent(id)}&select=id,config,saved_at,saved_by`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return dataResult(response);
+}
+
+export async function listLayouts(token) {
+  const response = await fetch(
+    `${DATA_API}/layouts?select=id,name,locked,updated_at,updated_by&order=updated_at.desc`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return dataResult(response, { allowEmpty: true });
+}
+
+export async function readLayout(token, id) {
+  const response = await fetch(
+    `${DATA_API}/layouts?id=eq.${encodeURIComponent(id)}&select=id,name,locked,config,updated_at,updated_by`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return dataResult(response);
+}
+
+export async function writeLayout(token, layout) {
+  const response = await fetch(`${DATA_API}/layouts?on_conflict=id`, {
+    method: 'POST',
+    headers: authHeaders(token, 'resolution=merge-duplicates,return=representation'),
+    body: JSON.stringify(layout),
+  });
+  return dataResult(response);
+}
+
+export async function patchLayout(token, id, patch) {
+  const response = await fetch(`${DATA_API}/layouts?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify(patch),
+  });
+  return dataResult(response);
+}
+
+export async function removeLayout(token, id) {
+  const response = await fetch(`${DATA_API}/layouts?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(token),
+  });
+  return dataResult(response);
+}
+
 export async function uploadMedia(token, file) {
   const response = await fetch(`${MEDIA_FN}/presign`, {
     method: 'POST',

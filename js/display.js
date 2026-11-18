@@ -1,11 +1,12 @@
 import { anonymousToken, boardHasLayout, readBoard } from './cloud.js';
 import { applyTheme } from './themes.js';
 import { createCalendar } from './calendar.js';
-import { normalizeConfig, pickTv } from './model.js';
+import { frameSize, normalizeConfig, pickTv } from './model.js';
 import { createStorage } from './storage.js';
 import { mountWidget, renderTakeover, takeoverActive } from './widgets.js';
 
 const stage = document.getElementById('stage');
+const frame = document.getElementById('frame');
 const slot = document.getElementById('takeover');
 const storage = createStorage();
 
@@ -36,6 +37,28 @@ function clearMounts() {
 
 function board() {
   return pickTv(config, params.get('tv'));
+}
+
+function rotationOf(tv) {
+  const raw = params.get('rotate');
+  if (raw != null && raw !== '') {
+    const query = Number(raw);
+    if (query === 0 || query === 90 || query === 180 || query === 270) return query;
+  }
+  const saved = Number(tv?.rotation);
+  return saved === 90 || saved === 180 || saved === 270 ? saved : 0;
+}
+
+function fitFrame() {
+  if (!frame || !config) return;
+  const current = board();
+  if (!current) return;
+  const bezel = frame.parentElement;
+  const orientation = params.get('orientation') || current.orientation || 'landscape';
+  const box = frameSize(bezel.clientWidth, bezel.clientHeight, orientation, rotationOf(current));
+  frame.style.width = `${box.width}px`;
+  frame.style.height = `${box.height}px`;
+  frame.style.transform = `translate(-50%, -50%) rotate(${box.rotate}deg)`;
 }
 
 function screenIndex(now) {
@@ -88,6 +111,7 @@ async function paint() {
   const orientation = params.get('orientation') || current.orientation || 'landscape';
   const force = params.get('takeover');
   applyTheme(document.querySelector('.bezel'), current.theme);
+  fitFrame();
   const showTakeover = takeoverActive(current.takeover, now, force);
   const index = screenIndex(now);
   const screen = (current.screens || [])[index] || { widgets: [] };
@@ -255,6 +279,7 @@ document.getElementById('fullscreen').addEventListener('click', () => {
   else document.exitFullscreen();
 });
 
+window.addEventListener('resize', () => fitFrame());
 setInterval(() => { paint(); }, 1000);
 setInterval(() => { pollCloud(); }, 30000);
 
