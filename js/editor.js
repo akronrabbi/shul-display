@@ -1,6 +1,7 @@
 import { createCalendar } from './calendar.js';
 import { authReady, currentUser, editorToken, sendEmailCode, signInWithCode, signInWithGoogle, signOut } from './auth.js';
 import { blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
+import { FONT_PAIRINGS, PRESETS, applyTheme, normalizeTheme, resolveTheme } from './themes.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { explainDriveError, listDriveFolderImages } from './drive.js';
@@ -161,6 +162,7 @@ async function renderCanvas() {
   const token = ++renderToken;
   clearMounts();
   canvas.replaceChildren();
+  applyTheme(canvas, tv().theme);
   fitCanvas();
   if (previewTakeover) {
     const flag = document.createElement('div');
@@ -297,11 +299,12 @@ function isPhone() {
 }
 
 function syncSheet() {
-  const open = isPhone() && (Boolean(selectedId) || mode === 'takeover' || document.body.dataset.sheet === 'screen');
+  const open = isPhone() && (Boolean(selectedId) || mode === 'takeover' || mode === 'theme' || document.body.dataset.sheet === 'screen');
   document.body.classList.toggle('sheet-open', open);
   const title = document.getElementById('sheet-title');
   if (!title) return;
-  if (mode === 'takeover') title.textContent = 'Full-screen message';
+  if (mode === 'theme') title.textContent = 'Theme';
+  else if (mode === 'takeover') title.textContent = 'Full-screen message';
   else if (selectedId) {
     const widget = findWidget(selectedId);
     title.textContent = widget ? (specOf(widget.type)?.label || 'This piece') : 'This piece';
@@ -403,8 +406,120 @@ function numberInput(value, apply) {
   return input;
 }
 
+function setTheme(patch, { rebuild = false } = {}) {
+  tv().theme = normalizeTheme({ ...tv().theme, ...patch });
+  markDirty();
+  applyTheme(canvas, tv().theme);
+  if (previewTakeover) renderCanvas();
+  if (rebuild) {
+    paintThemeBlock();
+    if (mode === 'theme') buildThemeForm();
+  }
+}
+
+function fillThemeControls(parent) {
+  const theme = normalizeTheme(tv().theme);
+  const resolved = resolveTheme(theme);
+  parent.append(el('p', 'hint', 'This television only. Another TV can wear a different theme.'));
+  const grid = el('div', 'theme-grid');
+  PRESETS.forEach((preset) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `swatch${preset.id === theme.preset ? ' on' : ''}`;
+    const face = document.createElement('span');
+    face.className = 'swatch-face';
+    face.style.background = preset.bg;
+    const surface = document.createElement('span');
+    surface.className = 'swatch-chip';
+    surface.style.background = preset.surface;
+    const accent = document.createElement('span');
+    accent.className = 'swatch-chip';
+    accent.style.background = preset.accent;
+    face.append(surface, accent);
+    const name = document.createElement('span');
+    name.className = 'swatch-name';
+    name.textContent = preset.label;
+    button.append(face, name);
+    button.addEventListener('click', () => {
+      setTheme({
+        preset: preset.id,
+        font: preset.font,
+        ground: preset.ground,
+        accent: null,
+        background: null,
+      }, { rebuild: true });
+    });
+    grid.append(button);
+  });
+  parent.append(grid);
+
+  const fonts = FONT_PAIRINGS.map((item) => [item.id, item.label]);
+  parent.append(field('Letters', selectInput(theme.font, fonts, (value) => {
+    setTheme({ font: value }, { rebuild: true });
+  })));
+  const pairing = FONT_PAIRINGS.find((item) => item.id === theme.font);
+  parent.append(el('p', 'hint', pairing?.note || ''));
+
+  const grounds = el('div', 'ground-row');
+  [['solid', 'Solid'], ['gradient', 'Soft gradient'], ['texture', 'Texture']].forEach(([value, label]) => {
+    const button = el('button', value === theme.ground ? 'on' : '', label);
+    button.type = 'button';
+    button.addEventListener('click', () => setTheme({ ground: value }, { rebuild: true }));
+    grounds.append(button);
+  });
+  parent.append(field('Background', grounds));
+
+  const accentRow = el('div', 'color-row');
+  const accent = document.createElement('input');
+  accent.type = 'color';
+  accent.value = resolved.vars['--accent'];
+  accent.setAttribute('aria-label', 'Accent color');
+  accent.addEventListener('input', () => setTheme({ accent: accent.value }));
+  accentRow.append(accent);
+  if (theme.accent) {
+    const reset = el('button', 'btn', 'Use the preset accent');
+    reset.type = 'button';
+    reset.addEventListener('click', () => setTheme({ accent: null }, { rebuild: true }));
+    accentRow.append(reset);
+  }
+  parent.append(field('Accent color', accentRow));
+
+  const backRow = el('div', 'color-row');
+  const background = document.createElement('input');
+  background.type = 'color';
+  background.value = resolved.vars['--bg'];
+  background.setAttribute('aria-label', 'Background color');
+  background.addEventListener('input', () => setTheme({ background: background.value }));
+  backRow.append(background);
+  if (theme.background) {
+    const reset = el('button', 'btn', 'Use the preset background');
+    reset.type = 'button';
+    reset.addEventListener('click', () => setTheme({ background: null }, { rebuild: true }));
+    backRow.append(reset);
+  }
+  parent.append(field('Background color', backRow));
+  parent.append(el('p', 'hint', 'Text on the accent and on the background switches to light or dark so it stays readable.'));
+}
+
+function paintThemeBlock() {
+  const host = document.getElementById('theme-block');
+  if (!host) return;
+  host.replaceChildren(el('h2', 'side-title', 'Theme'));
+  fillThemeControls(host);
+}
+
+function buildThemeForm() {
+  inspector.replaceChildren();
+  fillThemeControls(inspector);
+}
+
 function buildInspector() {
   inspector.replaceChildren();
+  if (mode === 'theme') {
+    buildThemeForm();
+    syncSheet();
+    return;
+  }
   if (mode === 'takeover') {
     buildTakeoverForm();
     syncSheet();
@@ -993,9 +1108,24 @@ function paintPalette() {
     selectedId = null;
     buildInspector();
   });
+  const themeButton = el('button', 'btn mobile-only', 'Theme');
+  themeButton.type = 'button';
+  themeButton.addEventListener('click', () => {
+    mode = 'theme';
+    selectedId = null;
+    previewTakeover = false;
+    document.body.classList.remove('menu-open');
+    buildInspector();
+  });
+  block.append(themeButton);
   block.append(takeover);
   if (tv().takeover.enabled) block.append(el('p', 'note', 'The full-screen message is on for this TV. It shows after you save.'));
   palette.append(block);
+
+  const themeBlock = el('div', 'side-block');
+  themeBlock.id = 'theme-block';
+  palette.append(themeBlock);
+  paintThemeBlock();
 
   const sourceBlock = el('div', 'side-block');
   sourceBlock.id = 'source-block';

@@ -72,9 +72,9 @@ export const WIDGET_TYPES = [
 ];
 
 const TONES = [
-  ['ivory', 'Ivory'],
-  ['navy', 'Navy'],
-  ['burgundy', 'Burgundy'],
+  ['ivory', 'Light card'],
+  ['navy', 'Dark card'],
+  ['burgundy', 'Accent'],
   ['clear', 'Plain'],
 ];
 
@@ -744,7 +744,7 @@ export async function renderTakeover(host, takeover, ctx) {
 }
 
 export function toneChoices(type) {
-  if (type === 'welcome') return [['band', 'Burgundy band'], ['navy', 'Navy band'], ['ivory', 'Ivory band']];
+  if (type === 'welcome') return [['band', 'Accent bar'], ['navy', 'Dark bar'], ['ivory', 'Light bar']];
   return TONES;
 }
 

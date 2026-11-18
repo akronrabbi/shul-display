@@ -1,3 +1,4 @@
+import { normalizeTheme } from './themes.js';
 import { defaultSettings, defaultTakeover } from './widgets.js';
 
 export function slugify(name) {
@@ -44,6 +45,7 @@ export function normalizeTv(tv, fallbackName) {
   }
   next.screens = next.screens.map((screen) => normalizeScreen(screen));
   next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
+  next.theme = normalizeTheme(next.theme);
   return next;
 }
 

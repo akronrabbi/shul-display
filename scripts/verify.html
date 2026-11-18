@@ -71,6 +71,7 @@
     check('kept shape', migrated.tvs[0].orientation === 'portrait');
     check('kept words', migrated.tvs[0].screens[0].widgets[0].settings.title === 'Hi');
     check('kept message', migrated.tvs[0].takeover.title === 'Old message');
+    check('classic theme', migrated.tvs[0].theme.preset === 'warm-classic' && migrated.tvs[0].theme.font === 'elegant');
     check('default tv', pickTv(migrated, '').id === 'lobby');
     const pair = normalizeConfig({ tvs: [{ id: 'lobby', name: 'Lobby' }, { id: 'social-hall', name: 'Social hall' }] });
     check('tv number', pickTv(pair, '2').id === 'social-hall');

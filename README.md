@@ -16,6 +16,8 @@ The TV page is the site root. The editor is [editor.html](editor.html).
 
 The screen in the editor is a live preview. The television changes when you save.
 
+**Theme** is at the left, under the pieces (on a phone it is in that same row). Each television has its own theme. Warm Classic is the original look. Tap another card to preview it, then pick letters, a background, and an accent if you want. Text on a custom color switches to light or dark so it can still be read from across the room. Save to send that look to the television. A full-screen message uses the same theme.
+
 **Export** downloads one JSON file with the layout and any pictures or PDFs you uploaded. **Import** puts that file back, including on another computer. **Load published layout** brings back the copy stored in this website's `config.json`.
 
 Under "Where the TV looks":

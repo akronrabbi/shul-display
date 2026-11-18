@@ -1,4 +1,5 @@
 import { anonymousToken, boardHasLayout, readBoard } from './cloud.js';
+import { applyTheme } from './themes.js';
 import { createCalendar } from './calendar.js';
 import { normalizeConfig, pickTv } from './model.js';
 import { createStorage } from './storage.js';
@@ -86,6 +87,7 @@ async function paint() {
   if (!current) return;
   const orientation = params.get('orientation') || current.orientation || 'landscape';
   const force = params.get('takeover');
+  applyTheme(document.querySelector('.bezel'), current.theme);
   const showTakeover = takeoverActive(current.takeover, now, force);
   const index = screenIndex(now);
   const screen = (current.screens || [])[index] || { widgets: [] };
