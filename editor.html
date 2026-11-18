@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Edit the lobby display - Anshe Sfard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,16 +18,20 @@
       <h1 class="brand-name">Anshe Sfard</h1>
       <p class="brand-sub">Lobby display for Rabbi Moshe Sasonkin</p>
     </div>
-    <div class="top-actions">
-      <button type="button" class="btn" id="reload-published">Load published layout</button>
-      <button type="button" class="btn" id="import">Import</button>
-      <button type="button" class="btn" id="export">Export</button>
-      <button type="button" class="btn" id="open-tv">Open the TV</button>
+    <div class="top-end">
+      <div class="top-actions" id="top-actions">
+        <button type="button" class="btn" id="reload-published">Load published layout</button>
+        <button type="button" class="btn" id="import">Import</button>
+        <button type="button" class="btn" id="export">Export</button>
+        <button type="button" class="btn" id="open-tv">Open the TV</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden>
+      </div>
       <button type="button" class="btn btn-primary" id="save">Save</button>
-      <input id="import-file" type="file" accept="application/json,.json" hidden>
+      <button type="button" class="btn menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="top-actions">Menu</button>
     </div>
   </header>
   <div class="tv-bar">
+    <select id="tv-select" class="tv-select" aria-label="Which TV"></select>
     <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
     <label class="tv-name-label">Name <input id="tv-name" type="text" maxlength="40" aria-label="TV name"></label>
     <div class="tv-address">
@@ -47,13 +51,21 @@
         </div>
         <div class="tabs" id="tabs"></div>
         <label class="choice"><input type="checkbox" id="cycle"> Rotate the screens</label>
+        <button type="button" class="btn mobile-only" id="screen-settings">Screen settings</button>
         <div class="status" id="status"></div>
       </div>
       <div class="board-frame" id="board-frame">
         <div class="screen-canvas" id="canvas"></div>
       </div>
     </main>
-    <aside class="inspector" id="inspector"></aside>
+    <button type="button" class="sheet-backdrop" id="sheet-backdrop" aria-label="Close settings"></button>
+    <aside class="inspector" id="inspector-panel">
+      <div class="sheet-bar">
+        <strong id="sheet-title">This piece</strong>
+        <button type="button" class="btn" id="sheet-done">Done</button>
+      </div>
+      <div class="inspector-body" id="inspector"></div>
+    </aside>
   </div>
   <script src="./vendor/hebcal/hebcal-core.min.js"></script>
   <script type="module" src="./js/editor.js"></script>

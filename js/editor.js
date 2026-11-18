@@ -237,8 +237,10 @@ function wireShell(shell, widget) {
     event.preventDefault();
     selectedId = widget.id;
     mode = 'widget';
+    delete document.body.dataset.sheet;
     canvas.querySelectorAll('.widget').forEach((node) => node.classList.toggle('selected', node.dataset.id === widget.id));
-    buildInspector();
+    if (isPhone()) document.body.classList.remove('sheet-open');
+    else buildInspector();
     const handle = event.target.closest('.handle');
     const orientation = tv().orientation;
     const startPlace = { ...widget.place[orientation] };
@@ -246,7 +248,11 @@ function wireShell(shell, widget) {
     const startY = event.clientY;
     const rect = canvas.getBoundingClientRect();
     try { shell.setPointerCapture(event.pointerId); } catch { /* pointer already gone */ }
+    document.body.classList.add('is-dragging');
+    let dragged = false;
     const move = (ev) => {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > 8) dragged = true;
+      ev.preventDefault();
       const dx = ((ev.clientX - startX) / rect.width) * 100;
       const dy = ((ev.clientY - startY) / rect.height) * 100;
       const next = { ...startPlace };
@@ -272,26 +278,46 @@ function wireShell(shell, widget) {
     const up = () => {
       shell.removeEventListener('pointermove', move);
       shell.removeEventListener('pointerup', up);
+      shell.removeEventListener('pointercancel', up);
+      document.body.classList.remove('is-dragging');
       widget.place[orientation] = snapPlace(widget.place[orientation]);
       applyPlace(shell, widget.place[orientation]);
       markDirty();
+      if (isPhone() && !dragged) buildInspector();
     };
     shell.addEventListener('pointermove', move);
     shell.addEventListener('pointerup', up);
+    shell.addEventListener('pointercancel', up);
   });
+}
+
+function isPhone() {
+  return window.matchMedia('(max-width: 820px)').matches;
+}
+
+function syncSheet() {
+  const open = isPhone() && (Boolean(selectedId) || mode === 'takeover' || document.body.dataset.sheet === 'screen');
+  document.body.classList.toggle('sheet-open', open);
+  const title = document.getElementById('sheet-title');
+  if (!title) return;
+  if (mode === 'takeover') title.textContent = 'Full-screen message';
+  else if (selectedId) {
+    const widget = findWidget(selectedId);
+    title.textContent = widget ? (specOf(widget.type)?.label || 'This piece') : 'This piece';
+  } else title.textContent = 'This screen';
 }
 
 function fitCanvas() {
   const frame = document.getElementById('board-frame');
   const ratio = tv().orientation === 'portrait' ? 9 / 16 : 16 / 9;
-  let width = frame.clientWidth;
+  let width = frame.clientWidth || 320;
   let height = width / ratio;
-  if (height > frame.clientHeight) {
+  if (!isPhone() && frame.clientHeight > 80 && height > frame.clientHeight) {
     height = frame.clientHeight;
     width = height * ratio;
   }
-  canvas.style.width = `${Math.max(160, width)}px`;
-  canvas.style.height = `${Math.max(160, height)}px`;
+  canvas.style.width = `${Math.max(160, Math.floor(width))}px`;
+  canvas.style.height = `${Math.max(120, Math.floor(height))}px`;
 }
 
 function el(tag, className, text) {
@@ -380,11 +406,13 @@ function buildInspector() {
   inspector.replaceChildren();
   if (mode === 'takeover') {
     buildTakeoverForm();
+    syncSheet();
     return;
   }
   const widget = selectedId ? findWidget(selectedId) : null;
   if (!widget) {
     buildScreenForm();
+    syncSheet();
     return;
   }
   const settings = widget.settings;
@@ -492,6 +520,7 @@ function buildInspector() {
   const remove = actionButton('Remove this piece', () => removeWidget(widget.id));
   order.append(remove);
   inspector.append(order);
+  syncSheet();
 }
 
 function actionButton(label, onClick) {
@@ -829,11 +858,33 @@ function deleteTv() {
   buildInspector();
 }
 
+function placeSource() {
+  const block = document.getElementById('source-block');
+  if (!block) return;
+  if (isPhone()) document.getElementById('top-actions').append(block);
+  else document.getElementById('palette').append(block);
+}
+
 function currentTvUrl() {
   return new URL(tvPageUrl(tv()), location.href).href;
 }
 
 function paintTvBar() {
+  const select = document.getElementById('tv-select');
+  if (select) {
+    select.replaceChildren();
+    state.tvs.forEach((item, index) => {
+      const option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = `TV ${index + 1} - ${item.name || 'Untitled'}`;
+      select.append(option);
+    });
+    const extra = document.createElement('option');
+    extra.value = 'add';
+    extra.textContent = '+ Add TV';
+    select.append(extra);
+    select.value = String(state.activeTv);
+  }
   const host = document.getElementById('tv-tabs');
   host.replaceChildren();
   state.tvs.forEach((item, index) => {
@@ -915,7 +966,16 @@ function paintPalette() {
     const button = el('button', 'piece');
     button.type = 'button';
     button.append(el('strong', '', item.label), el('span', '', item.blurb));
-    button.addEventListener('pointerdown', (event) => startPaletteDrag(item.type, event));
+    button.addEventListener('pointerdown', (event) => {
+      if (isPhone()) return;
+      startPaletteDrag(item.type, event);
+    });
+    button.addEventListener('click', () => {
+      if (!isPhone()) return;
+      previewTakeover = false;
+      document.body.classList.remove('menu-open');
+      addWidget(item.type, stackedPlace(item.type, tv().orientation));
+    });
     palette.append(button);
   });
   const block = el('div', 'side-block');
@@ -931,6 +991,7 @@ function paintPalette() {
   palette.append(block);
 
   const sourceBlock = el('div', 'side-block');
+  sourceBlock.id = 'source-block';
   sourceBlock.append(el('h2', 'side-title', 'Where the TV looks'));
   const current = storage.getSource();
   [['auto', 'Automatic - this computer after you save, otherwise the published file'], ['local', 'This computer'], ['published', 'The published file on the website']].forEach(([value, label]) => {
@@ -1068,7 +1129,41 @@ function bindChrome() {
   });
   window.addEventListener('resize', () => {
     fitCanvas();
+    placeSource();
+    syncSheet();
   });
+  document.getElementById('menu-toggle').addEventListener('click', () => {
+    const open = document.body.classList.toggle('menu-open');
+    document.getElementById('menu-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!document.body.classList.contains('menu-open')) return;
+    if (event.target.closest('#top-actions') || event.target.closest('#menu-toggle')) return;
+    document.body.classList.remove('menu-open');
+    document.getElementById('menu-toggle').setAttribute('aria-expanded', 'false');
+  });
+  document.getElementById('tv-select').addEventListener('change', (event) => {
+    if (event.target.value === 'add') addTv();
+    else selectTv(Number(event.target.value));
+  });
+  document.getElementById('screen-settings').addEventListener('click', () => {
+    selectedId = null;
+    mode = 'screen';
+    previewTakeover = false;
+    document.body.dataset.sheet = 'screen';
+    canvas.querySelectorAll('.widget').forEach((node) => node.classList.remove('selected'));
+    buildInspector();
+  });
+  const closeSheet = () => {
+    delete document.body.dataset.sheet;
+    selectedId = null;
+    mode = 'screen';
+    previewTakeover = false;
+    canvas.querySelectorAll('.widget').forEach((node) => node.classList.remove('selected'));
+    buildInspector();
+  };
+  document.getElementById('sheet-done').addEventListener('click', closeSheet);
+  document.getElementById('sheet-backdrop').addEventListener('click', closeSheet);
   document.addEventListener('keydown', (event) => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -1115,6 +1210,7 @@ async function init() {
   savedJson = JSON.stringify(state);
   bindChrome();
   paintPalette();
+  placeSource();
   paintChrome();
   buildInspector();
   await renderCanvas();
