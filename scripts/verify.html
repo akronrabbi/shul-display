@@ -11,6 +11,7 @@
     import { createCalendar, akronWallTimeToDate } from '../js/calendar.js';
     import { isCurrentEvent } from '../js/events.js';
     import { classifyImageLine } from '../js/images.js';
+    import { normalizeConfig, pickTv } from '../js/model.js';
 
     const failures = [];
     const check = (name, ok, detail) => {
@@ -58,6 +59,22 @@
     const z = cal.zmanim(wed);
     const sunset = z.items.find((item) => item.key === 'sunset');
     check('sunset present', Boolean(sunset && sunset.time));
+
+    const migrated = normalizeConfig({
+      version: 1,
+      orientation: 'portrait',
+      screens: [{ id: 'main', name: 'Main', widgets: [{ id: 'w', type: 'text', settings: { title: 'Hi' } }] }],
+      takeover: { title: 'Old message' },
+    });
+    check('one tv', migrated.tvs.length === 1 && migrated.tvs[0].name === 'Lobby' && migrated.tvs[0].id === 'lobby');
+    check('kept shape', migrated.tvs[0].orientation === 'portrait');
+    check('kept words', migrated.tvs[0].screens[0].widgets[0].settings.title === 'Hi');
+    check('kept message', migrated.tvs[0].takeover.title === 'Old message');
+    check('default tv', pickTv(migrated, '').id === 'lobby');
+    const pair = normalizeConfig({ tvs: [{ id: 'lobby', name: 'Lobby' }, { id: 'social-hall', name: 'Social hall' }] });
+    check('tv number', pickTv(pair, '2').id === 'social-hall');
+    check('tv slug', pickTv(pair, 'social-hall').id === 'social-hall');
+    check('no double wrap', normalizeConfig(migrated).tvs.length === 1);
 
     document.getElementById('out').textContent = failures.length
       ? 'FAIL\n' + failures.join('\n')

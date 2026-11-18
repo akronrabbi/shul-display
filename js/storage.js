@@ -59,13 +59,12 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([bytes], { type: mime });
 }
 
-export function collectAssetIds(config) {
-  const ids = new Set();
+function collectFromScreens(ids, screens, takeover) {
   const add = (id) => {
     if (id) ids.add(id);
   };
-  if (config?.takeover) add(config.takeover.backgroundAssetId);
-  for (const screen of config?.screens || []) {
+  if (takeover) add(takeover.backgroundAssetId);
+  for (const screen of screens || []) {
     for (const widget of screen.widgets || []) {
       const settings = widget.settings || {};
       add(settings.assetId);
@@ -73,6 +72,14 @@ export function collectAssetIds(config) {
       for (const image of settings.images || []) add(image.assetId);
     }
   }
+}
+
+export function collectAssetIds(config) {
+  const ids = new Set();
+  if (Array.isArray(config?.tvs)) {
+    for (const tv of config.tvs) collectFromScreens(ids, tv.screens, tv.takeover);
+  }
+  collectFromScreens(ids, config?.screens, config?.takeover);
   return [...ids];
 }
 

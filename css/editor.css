@@ -58,6 +58,69 @@ body {
 
 .btn-primary:hover { background: #581c29; }
 
+.tv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 10px 22px;
+  background: rgba(255, 250, 243, 0.62);
+  border-bottom: 1px solid rgba(36, 28, 22, 0.08);
+}
+
+.tv-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.tv-tab {
+  border: 1px solid #c4b49a;
+  background: transparent;
+  padding: 8px 12px;
+  font-weight: 600;
+}
+
+.tv-tab.on {
+  background: var(--navy);
+  color: var(--ivory);
+  border-color: var(--navy);
+}
+
+.tv-name-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tv-name-label input {
+  width: 160px;
+  border: 1px solid #c4b49a;
+  background: #fffaf3;
+  padding: 7px 8px;
+}
+
+.tv-address {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.tv-address code {
+  font-family: ui-monospace, "Source Sans 3", sans-serif;
+  font-size: 13px;
+  background: #fffaf3;
+  border: 1px solid #c4b49a;
+  padding: 7px 8px;
+  max-width: min(440px, 46vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button:disabled { opacity: 0.45; cursor: default; }
+
 .workspace {
   flex: 1;
   min-height: 0;

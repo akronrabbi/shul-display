@@ -1,4 +1,5 @@
 import { createCalendar } from './calendar.js';
+import { normalizeConfig, pickTv } from './model.js';
 import { createStorage } from './storage.js';
 import { mountWidget, renderTakeover, takeoverActive } from './widgets.js';
 
@@ -31,10 +32,15 @@ function clearMounts() {
   disposers = [];
 }
 
+function board() {
+  return pickTv(config, params.get('tv'));
+}
+
 function screenIndex(now) {
-  const screens = config.screens || [];
-  if (screens.length < 2 || !config.cycleScreens) {
-    return Math.min(screens.length - 1, Math.max(0, config.activeScreen || 0));
+  const current = board();
+  const screens = current?.screens || [];
+  if (screens.length < 2 || !current.cycleScreens) {
+    return Math.min(Math.max(screens.length - 1, 0), Math.max(0, current?.activeScreen || 0));
   }
   const durations = screens.map((screen) => Math.max(5, Number(screen.duration) || 20));
   const total = durations.reduce((sum, value) => sum + value, 0);
@@ -75,17 +81,20 @@ function placeOf(widget, orientation) {
 async function paint() {
   if (!calendar || !config) return;
   const now = new Date();
-  const orientation = params.get('orientation') || config.orientation || 'landscape';
+  const current = board();
+  if (!current) return;
+  const orientation = params.get('orientation') || current.orientation || 'landscape';
   const force = params.get('takeover');
-  const showTakeover = takeoverActive(config.takeover, now, force);
+  const showTakeover = takeoverActive(current.takeover, now, force);
   const index = screenIndex(now);
-  const screen = (config.screens || [])[index] || { widgets: [] };
+  const screen = (current.screens || [])[index] || { widgets: [] };
   const key = JSON.stringify({
+    tv: current.id,
     showTakeover,
     index,
     orientation,
     widgets: screen.widgets,
-    takeover: config.takeover,
+    takeover: current.takeover,
     force,
   });
   if (key === currentKey) return;
@@ -95,7 +104,7 @@ async function paint() {
   if (showTakeover) {
     stage.replaceChildren();
     slot.hidden = false;
-    const dispose = await renderTakeover(slot, config.takeover || {}, makeCtx(screen));
+    const dispose = await renderTakeover(slot, current.takeover || {}, makeCtx(screen));
     if (my !== token) {
       dispose();
       return;
@@ -141,19 +150,21 @@ function usingLocal() {
 async function load() {
   if (!calendar) return;
   const local = storage.loadLocal();
-  if (usingLocal() && local) config = local;
+  let raw = null;
+  if (usingLocal() && local) raw = local;
   else {
     try {
-      config = await storage.loadPublished();
+      raw = await storage.loadPublished();
     } catch {
-      config = null;
+      raw = null;
     }
-    if (!config && local) config = local;
+    if (!raw && local) raw = local;
   }
-  if (!config) {
+  if (!raw) {
     stage.innerHTML = '<div class="boot-error">No layout is saved on this computer, and the published file could not be read.</div>';
     return;
   }
+  config = normalizeConfig(raw);
   const nextKey = JSON.stringify(config);
   if (nextKey === loadedKey && currentKey) return;
   loadedKey = nextKey;
@@ -168,7 +179,7 @@ storage.subscribe((message) => {
     return;
   }
   if (message.type === 'save' && message.config && usingLocal()) {
-    config = message.config;
+    config = normalizeConfig(message.config);
     currentKey = '';
     paint();
   }

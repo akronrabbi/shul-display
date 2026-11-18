@@ -1,11 +1,11 @@
 import { createCalendar } from './calendar.js';
+import { blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { isCurrentEvent } from './events.js';
 import {
   WIDGET_TYPES,
   defaultSettings,
-  defaultTakeover,
   mountWidget,
   renderTakeover,
   toneChoices,
@@ -32,29 +32,13 @@ function uid(prefix) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function normalize(config) {
-  const next = structuredClone(config || {});
-  next.version = 1;
-  next.orientation = next.orientation === 'portrait' ? 'portrait' : 'landscape';
-  next.cycleScreens = Boolean(next.cycleScreens);
-  next.activeScreen = next.activeScreen || 0;
-  if (!Array.isArray(next.screens) || !next.screens.length) {
-    next.screens = [{ id: 'main', name: 'Main', duration: 30, widgets: [] }];
-  }
-  next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
-  next.screens.forEach((screen) => {
-    screen.widgets = screen.widgets || [];
-    screen.duration = Number(screen.duration) || 30;
-    screen.widgets.forEach((widget) => {
-      widget.settings = { ...defaultSettings(widget.type), ...(widget.settings || {}) };
-      widget.place = widget.place || {};
-    });
-  });
-  return next;
+function tv() {
+  return state.tvs[Math.min(state.tvs.length - 1, Math.max(0, state.activeTv || 0))];
 }
 
 function screen() {
-  return state.screens[Math.min(state.screens.length - 1, Math.max(0, state.activeScreen || 0))];
+  const board = tv();
+  return board.screens[Math.min(board.screens.length - 1, Math.max(0, board.activeScreen || 0))];
 }
 
 function findWidget(id) {
@@ -130,7 +114,7 @@ function stackedPlace(type, orientation) {
 
 function addWidget(type, place) {
   const spec = specOf(type);
-  const orientation = state.orientation;
+  const orientation = tv().orientation;
   const other = orientation === 'portrait' ? 'landscape' : 'portrait';
   const widget = {
     id: uid('w'),
@@ -157,7 +141,7 @@ function pointInCanvas(event) {
 
 function dropPlace(type, clientX, clientY) {
   const spec = specOf(type);
-  const size = state.orientation === 'portrait' ? spec.portrait : spec.size;
+  const size = tv().orientation === 'portrait' ? spec.portrait : spec.size;
   const rect = canvas.getBoundingClientRect();
   const x = ((clientX - rect.left) / rect.width) * 100 - size.w / 2;
   const y = ((clientY - rect.top) / rect.height) * 100 - size.h / 2;
@@ -185,7 +169,7 @@ async function renderCanvas() {
     host.className = 'takeover-slot';
     host.style.inset = '0';
     canvas.append(host);
-    const dispose = await renderTakeover(host, state.takeover, ctx());
+    const dispose = await renderTakeover(host, tv().takeover, ctx());
     if (token !== renderToken) {
       dispose();
       return;
@@ -206,8 +190,8 @@ async function renderCanvas() {
     shell.className = `widget tone-${widget.settings.tone || 'ivory'}`;
     shell.dataset.id = widget.id;
     if (widget.id === selectedId) shell.classList.add('selected');
-    const place = widget.place[state.orientation] || stackedPlace(widget.type, state.orientation);
-    widget.place[state.orientation] = place;
+    const place = widget.place[tv().orientation] || stackedPlace(widget.type, tv().orientation);
+    widget.place[tv().orientation] = place;
     applyPlace(shell, place);
     shell.style.zIndex = String(10 + widgets.indexOf(widget));
     const body = document.createElement('div');
@@ -255,7 +239,7 @@ function wireShell(shell, widget) {
     canvas.querySelectorAll('.widget').forEach((node) => node.classList.toggle('selected', node.dataset.id === widget.id));
     buildInspector();
     const handle = event.target.closest('.handle');
-    const orientation = state.orientation;
+    const orientation = tv().orientation;
     const startPlace = { ...widget.place[orientation] };
     const startX = event.clientX;
     const startY = event.clientY;
@@ -298,7 +282,7 @@ function wireShell(shell, widget) {
 
 function fitCanvas() {
   const frame = document.getElementById('board-frame');
-  const ratio = state.orientation === 'portrait' ? 9 / 16 : 16 / 9;
+  const ratio = tv().orientation === 'portrait' ? 9 / 16 : 16 / 9;
   let width = frame.clientWidth;
   let height = width / ratio;
   if (height > frame.clientHeight) {
@@ -676,10 +660,10 @@ function buildScreenForm() {
 }
 
 function buildTakeoverForm() {
-  const takeover = state.takeover;
+  const takeover = tv().takeover;
   inspector.append(el('h2', 'side-title', 'Full-screen message'));
-  inspector.append(el('p', 'hint', 'Use this for a simcha or an announcement that should cover the whole TV. The sample wording is only an example. Change it before you turn it on.'));
-  const enabled = checkInput(takeover.enabled, 'Show this message on the TV', (value) => { takeover.enabled = value; });
+  inspector.append(el('p', 'hint', 'This covers only the TV you are editing. The sample wording is only an example. Change it before you turn it on.'));
+  const enabled = checkInput(takeover.enabled, 'Show this message on this TV', (value) => { takeover.enabled = value; });
   inspector.append(enabled);
   inspector.append(field('Small line', textInput(takeover.eyebrow, (value) => { takeover.eyebrow = value; if (previewTakeover) renderCanvas(); })));
   inspector.append(field('Main message', areaInput(takeover.title, (value) => { takeover.title = value; if (previewTakeover) renderCanvas(); })));
@@ -753,16 +737,84 @@ async function removeWidget(id) {
   buildInspector();
 }
 
+function selectTv(index) {
+  if (index === state.activeTv) return;
+  state.activeTv = index;
+  selectedId = null;
+  previewTakeover = false;
+  mode = 'screen';
+  markDirty();
+  paintChrome();
+  renderCanvas();
+  buildInspector();
+}
+
+function addTv() {
+  const name = `TV ${state.tvs.length + 1}`;
+  state.tvs.push(blankTv(name, uniqueId(state.tvs, slugify(name))));
+  state.activeTv = state.tvs.length - 1;
+  selectedId = null;
+  previewTakeover = false;
+  mode = 'screen';
+  markDirty();
+  paintChrome();
+  renderCanvas();
+  buildInspector();
+}
+
+function deleteTv() {
+  if (state.tvs.length < 2) return;
+  const current = tv();
+  const label = `TV ${state.activeTv + 1} - ${current.name || 'Untitled'}`;
+  if (!confirm(`Remove ${label}? Its address will stop working.`)) return;
+  state.tvs.splice(state.activeTv, 1);
+  state.activeTv = Math.max(0, state.activeTv - 1);
+  selectedId = null;
+  previewTakeover = false;
+  mode = 'screen';
+  markDirty();
+  paintChrome();
+  renderCanvas();
+  buildInspector();
+}
+
+function currentTvUrl() {
+  return new URL(tvPageUrl(tv()), location.href).href;
+}
+
+function paintTvBar() {
+  const host = document.getElementById('tv-tabs');
+  host.replaceChildren();
+  state.tvs.forEach((item, index) => {
+    const button = el('button', `tv-tab${index === state.activeTv ? ' on' : ''}`, `TV ${index + 1} - ${item.name || 'Untitled'}`);
+    button.type = 'button';
+    button.addEventListener('click', () => selectTv(index));
+    host.append(button);
+  });
+  const add = el('button', 'tv-tab add', '+ Add TV');
+  add.type = 'button';
+  add.addEventListener('click', addTv);
+  host.append(add);
+  const name = document.getElementById('tv-name');
+  if (document.activeElement !== name) name.value = tv().name || '';
+  const url = currentTvUrl();
+  const link = document.getElementById('tv-url');
+  link.textContent = url;
+  link.title = url;
+  document.getElementById('delete-tv').disabled = state.tvs.length < 2;
+}
+
 function paintChrome() {
-  document.getElementById('orient-land').classList.toggle('on', state.orientation === 'landscape');
-  document.getElementById('orient-port').classList.toggle('on', state.orientation === 'portrait');
-  document.getElementById('cycle').checked = Boolean(state.cycleScreens);
+  paintTvBar();
+  document.getElementById('orient-land').classList.toggle('on', tv().orientation === 'landscape');
+  document.getElementById('orient-port').classList.toggle('on', tv().orientation === 'portrait');
+  document.getElementById('cycle').checked = Boolean(tv().cycleScreens);
   tabs.replaceChildren();
-  state.screens.forEach((item, index) => {
-    const button = el('button', `tab${index === state.activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
+  tv().screens.forEach((item, index) => {
+    const button = el('button', `tab${index === tv().activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
     button.type = 'button';
     button.addEventListener('click', () => {
-      state.activeScreen = index;
+      tv().activeScreen = index;
       selectedId = null;
       mode = 'screen';
       previewTakeover = false;
@@ -776,8 +828,8 @@ function paintChrome() {
   const add = el('button', 'tab', '+ Screen');
   add.type = 'button';
   add.addEventListener('click', () => {
-    state.screens.push({ id: uid('s'), name: `Screen ${state.screens.length + 1}`, duration: 20, widgets: [] });
-    state.activeScreen = state.screens.length - 1;
+    tv().screens.push({ id: uid('s'), name: `Screen ${tv().screens.length + 1}`, duration: 20, widgets: [] });
+    tv().activeScreen = tv().screens.length - 1;
     selectedId = null;
     mode = 'screen';
     previewTakeover = false;
@@ -787,13 +839,13 @@ function paintChrome() {
     buildInspector();
   });
   tabs.append(add);
-  if (state.screens.length > 1) {
+  if (tv().screens.length > 1) {
     const remove = el('button', 'tab', 'Remove screen');
     remove.type = 'button';
     remove.addEventListener('click', () => {
-      if (state.screens.length < 2) return;
-      state.screens.splice(state.activeScreen, 1);
-      state.activeScreen = Math.max(0, state.activeScreen - 1);
+      if (tv().screens.length < 2) return;
+      tv().screens.splice(tv().activeScreen, 1);
+      tv().activeScreen = Math.max(0, tv().activeScreen - 1);
       selectedId = null;
       markDirty();
       paintChrome();
@@ -824,7 +876,7 @@ function paintPalette() {
     buildInspector();
   });
   block.append(takeover);
-  if (state.takeover.enabled) block.append(el('p', 'note', 'The full-screen message is on. The TV will show it after you save.'));
+  if (tv().takeover.enabled) block.append(el('p', 'note', 'The full-screen message is on for this TV. It shows after you save.'));
   palette.append(block);
 
   const sourceBlock = el('div', 'side-block');
@@ -867,7 +919,7 @@ function startPaletteDrag(type, event) {
     ghost.remove();
     previewTakeover = false;
     if (pointInCanvas(ev)) addWidget(type, dropPlace(type, ev.clientX, ev.clientY));
-    else if (!moved) addWidget(type, stackedPlace(type, state.orientation));
+    else if (!moved) addWidget(type, stackedPlace(type, tv().orientation));
   };
   document.addEventListener('pointermove', move);
   document.addEventListener('pointerup', up);
@@ -878,7 +930,7 @@ async function save() {
   storage.saveLocal(state);
   savedJson = JSON.stringify(state);
   hasLocal = true;
-  status.textContent = 'Saved. The TV on this computer will update.';
+  status.textContent = 'Saved. The TVs on this computer will update.';
 }
 
 async function exportFile() {
@@ -895,7 +947,22 @@ async function exportFile() {
 function bindChrome() {
   document.getElementById('save').addEventListener('click', save);
   document.getElementById('open-tv').addEventListener('click', () => {
-    window.open('./index.html', 'shulDisplay');
+    window.open(tvPageUrl(tv()), `shul-${tv().id}`);
+  });
+  document.getElementById('copy-link').addEventListener('click', async () => {
+    const url = currentTvUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      status.textContent = 'Link copied.';
+    } catch {
+      status.textContent = url;
+    }
+  });
+  document.getElementById('delete-tv').addEventListener('click', deleteTv);
+  document.getElementById('tv-name').addEventListener('input', (event) => {
+    tv().name = event.target.value;
+    markDirty();
+    paintTvBar();
   });
   document.getElementById('export').addEventListener('click', exportFile);
   document.getElementById('import').addEventListener('click', () => document.getElementById('import-file').click());
@@ -916,21 +983,21 @@ function bindChrome() {
     status.textContent = 'Imported and saved.';
   });
   document.getElementById('orient-land').addEventListener('click', () => {
-    state.orientation = 'landscape';
+    tv().orientation = 'landscape';
     previewTakeover = false;
     markDirty();
     paintChrome();
     renderCanvas();
   });
   document.getElementById('orient-port').addEventListener('click', () => {
-    state.orientation = 'portrait';
+    tv().orientation = 'portrait';
     previewTakeover = false;
     markDirty();
     paintChrome();
     renderCanvas();
   });
   document.getElementById('cycle').addEventListener('change', (event) => {
-    state.cycleScreens = event.target.checked;
+    tv().cycleScreens = event.target.checked;
     markDirty();
   });
   document.getElementById('reload-published').addEventListener('click', async () => {
@@ -961,15 +1028,15 @@ function bindChrome() {
     if (selectedId && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault();
       const widget = findWidget(selectedId);
-      const place = widget.place[state.orientation];
+      const place = widget.place[tv().orientation];
       const step = 2;
       if (event.key === 'ArrowLeft') place.x -= step;
       if (event.key === 'ArrowRight') place.x += step;
       if (event.key === 'ArrowUp') place.y -= step;
       if (event.key === 'ArrowDown') place.y += step;
-      widget.place[state.orientation] = snapPlace(place);
+      widget.place[tv().orientation] = snapPlace(place);
       const shell = canvas.querySelector(`[data-id="${selectedId}"]`);
-      if (shell) applyPlace(shell, widget.place[state.orientation]);
+      if (shell) applyPlace(shell, widget.place[tv().orientation]);
       markDirty();
     }
   });

@@ -27,6 +27,16 @@
       <input id="import-file" type="file" accept="application/json,.json" hidden>
     </div>
   </header>
+  <div class="tv-bar">
+    <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
+    <label class="tv-name-label">Name <input id="tv-name" type="text" maxlength="40" aria-label="TV name"></label>
+    <div class="tv-address">
+      <span>Address</span>
+      <code id="tv-url"></code>
+      <button type="button" class="btn" id="copy-link">Copy link</button>
+      <button type="button" class="btn" id="delete-tv">Remove this TV</button>
+    </div>
+  </div>
   <div class="workspace">
     <aside class="palette" id="palette"></aside>
     <main class="board">

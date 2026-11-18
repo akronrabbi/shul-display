@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v1';
+const CACHE = 'shul-display-v2';
 const FILES = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const FILES = [
   './js/calendar.js',
   './js/events.js',
   './js/images.js',
+  './js/model.js',
   './js/storage.js',
   './js/widgets.js',
   './js/display.js',

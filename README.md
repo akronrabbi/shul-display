@@ -7,11 +7,12 @@ The TV page is the site root. The editor is [editor.html](editor.html).
 ## Use the editor
 
 1. Open the editor on the computer that is plugged into the TV.
-2. Drag a piece from the left onto the screen, or click a piece to drop it in. Date, Shabbos times, logo, welcome line, photos, PDF flyer, events, announcement, and zmanim are all available.
-3. Drag a piece to move it. Drag the corners to resize it. Click it to change its words on the right.
-4. Use Landscape or Portrait so the shape matches the television.
-5. Press **Save**. Then press **Open the TV**, move that window onto the television, and press **Full screen**.
-6. After that, every Save updates the TV on its own.
+2. Pick the television at the top: TV 1 - Lobby, TV 2, and so on. **+ Add TV** makes another one. Type a name, and **Copy link** for the address that television should open. **Remove this TV** asks before it deletes one.
+3. Drag a piece from the left onto the screen, or click a piece to drop it in. Date, Shabbos times, logo, welcome line, photos, PDF flyer, events, announcement, and zmanim are all available.
+4. Drag a piece to move it. Drag the corners to resize it. Click it to change its words on the right.
+5. Use Landscape or Portrait so the shape matches that television. Each TV keeps its own shape, its own screens, and its own full-screen message.
+6. Press **Save**. Then press **Open the TV**, move that window onto the television, and press **Full screen**.
+7. After that, every Save updates the TVs on this computer. A TV with no name in the address shows TV 1. `index.html?tv=2` shows the second TV, and `index.html?tv=lobby` shows the one whose address says lobby.
 
 The screen in the editor is a live preview. The television changes when you save.
 
@@ -25,7 +26,7 @@ Under "Where the TV looks":
 
 You can add more than one screen and turn on **Rotate the screens**. Each screen has its own pieces. The words are not copied when you add a screen.
 
-**Full-screen message** covers the whole TV with one announcement, for example a simcha. Turn it on, then Save. You can also limit it to a start and end in Akron time. The wording already filled in is only a sample. Change it before you turn it on. Preview stays in the editor until you save with the message turned on.
+**Full-screen message** covers only the TV you are editing, for example a simcha in the social hall. Turn it on, then Save. You can also limit it to a start and end in Akron time. The wording already filled in is only a sample. Change it before you turn it on. Preview stays in the editor until you save with the message turned on.
 
 Past events stay in the editor list and disappear from the TV once their date and time have passed. A date with no time stays up through that day.
 
@@ -49,7 +50,7 @@ The default mark is the Anshe Sfard logo from [akronshul.com](https://akronshul.
 
 ## Publishing a layout
 
-`config.json` in this repository is the layout a new TV uses before anyone presses Save. Edit that file, or export from the editor and replace `config.json`, then push to `main`. The display re-reads the published file about once a minute when it is set to the published file.
+`config.json` in this repository holds every TV. A new screen uses it before anyone presses Save. Edit that file, or export from the editor and replace `config.json`, then push to `main`. The display re-reads the published file about once a minute when it is set to the published file.
 
 GitHub Pages is deployed by `.github/workflows/pages.yml` on every push to `main`. In the repository settings, set Pages to **GitHub Actions** (the workflow cannot turn that setting on by itself). The site is then at:
 
