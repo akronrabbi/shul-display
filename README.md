@@ -16,9 +16,29 @@ The TV page is the site root. The editor is [editor.html](editor.html).
 
 The screen in the editor is a live preview. The television changes when you save.
 
-**Theme** is at the left, under the pieces (on a phone it is in that same row). Each television has its own theme. Warm Classic is the original look. Tap another card to preview it, then pick letters, a background, and an accent if you want. Text on a custom color switches to light or dark so it can still be read from across the room. Save to send that look to the television. A full-screen message uses the same theme.
+### The top bar
 
-Each piece has **Text style**. You can change the font, size, weight, italics, color, alignment, and the space between lines, paragraphs, and letters. Big numbers, labels, and the main words can be styled apart. **Reset to theme** puts that piece back. **Auto fit** shrinks words into the box. **Fixed size** uses the percentage you choose.
+**Save** is on the right, with a status next to it: amber means not saved yet, green means the TV is up to date. **This week** gathers every welcome line, announcement, and events list on this TV into one list, so the weekly update is a single form. **Ready layouts** offers evenly spaced starting points (Weekly board, Shabbos, Photo showcase, Events and news, Flyer, Minimal). Use one on the current screen or add it as a new screen. Words, events, and photos carry over where the layout has the same kind of piece, and everything stays movable. **More** holds Open the TV, Saved layouts, History, Import, Export, and Load published layout. Ctrl+S saves, and Ctrl+Z / Ctrl+Shift+Z undo and redo.
+
+### Placing pieces
+
+While you drag, pink guide lines show when a piece lines up with the screen edges, the middle, the even margins the ready layouts use, or another piece. Hold Alt to place freely. Arrow keys nudge by half a percent, and Shift+arrow by 5%. Each piece has **Lock in place**, **Duplicate** (Ctrl+D), **Select several**, and layer buttons. Shift-click several pieces (or tap **Select several** on a phone) to line up their edges or middles, space them evenly, or match their sizes.
+
+**When it shows on the TV** sets a first and last day for any piece, for example an announcement for one week. Outside those days the TV leaves it out, and the editor shows it faded with "Not on the TV today".
+
+Events can repeat **every week** or **every other week**, with an optional last date. The TV shows the next date.
+
+### Shabbos mode
+
+Shabbos mode is optional and off until you turn it on in **Screen settings**. Make a screen for Shabbos (Ready layouts, Shabbos, As a new screen), then choose it under Shabbos mode. The TV switches to that screen a set number of minutes before candle lighting and back a set number of minutes after havdalah, using the same times as the Shabbos piece. **Also on Yom Tov** covers Yom Tov the same way. That screen is left out of the regular cycle. The editor shows when it will next switch.
+
+### Movement
+
+**Movement between screens** (Screen settings) fades the next screen in over the last one, with no blank flash. You can also choose Fade and rise, Slide across, or a plain cut. The Photos piece has its own **Movement between photos**: Soft fade, Fade with a slow zoom, Slide across, or Cut. Each picture finishes loading before it appears. PDF pages fade from one to the next.
+
+**Theme** is at the left, under the pieces (on a phone it is in that same row). Each television has its own theme. Warm Classic is the original look. The modern looks are Midnight Glass, Sapphire, Graphite, and Gallery White. **Cards** switches any theme between Solid, Frosted glass, and Minimal line. Tap another card to preview it, then pick letters, a background, and an accent if you want. Text on a custom color switches to light or dark so it can still be read from across the room. Save to send that look to the television. A full-screen message uses the same theme.
+
+Each piece has **Text style**. To keep a board clean, a TV can use at most two fonts beyond its theme; once two are in use, the other fonts are greyed out until a piece goes back to Theme default. You can change the font, size, weight, italics, color, alignment, and the space between lines, paragraphs, and letters. Big numbers, labels, and the main words can be styled apart. **Reset to theme** puts that piece back. **Auto fit** shrinks words into the box. **Fixed size** uses the percentage you choose.
 
 **Saved layouts** and **History** are in the menu. Save a named copy such as Regular week or Shabbos, and lock it if it should not be changed. Every online save keeps the previous board, up to the last 30. Restore puts one back, and that step is kept in History too. Undo and Redo are for changes you have not saved yet.
 
@@ -50,9 +70,11 @@ Checked against Hebcal for the week of 18 November 2026: Wednesday daytime is 8 
 
 Upload pictures, or paste direct image addresses, one per line. A single Google Drive file shared as "anyone with the link" can be pasted as the Drive link. The editor turns it into an image address.
 
+**Google Photos** works through Google's Photos Picker. Press **Choose photos from Google Photos** in the Photos piece, pick pictures (to use an album, open it in the Google window and select its pictures), and press Done. The editor copies them into this board's media storage, so the TV never needs Google. To add new ones later, pick again. This needs a one-time Google client ID, and the steps are in the Photos piece: turn on the Google Photos Picker API, create an OAuth client ID of type Web application with `https://akronrabbi.github.io` as an authorized JavaScript origin, and add each editor as a test user. A pasted album link still cannot be read; Google ended that on 31 March 2025.
+
 A whole Drive folder works too. Share the folder as Anyone with the link, paste the folder link, and paste a Google API key locked to `https://akronrabbi.github.io/*` and to the Drive API only. The steps are in the photo piece. The TV asks Google for the picture list about every 10 minutes, so new pictures show up on their own. The key is stored with the layout. Restrict it, because anyone who can view the page can see it.
 
-A Google Photos album link is not supported. Google removed shared-album access on 31 March 2025. The album page cannot be framed or read by this browser, and the other Photos APIs need a person to sign in each time, or approval as a device partner. Uploads and a Drive folder are the ways that keep working.
+A Google Photos album cannot be linked so that it updates on its own. Google removed shared-album access on 31 March 2025. Use the Google Photos button (it copies the pictures you pick), uploads, or a Drive folder, which the TV re-checks every 10 minutes.
 
 ## Logo
 
@@ -68,6 +90,8 @@ https://akronrabbi.github.io/shul-display/
 
 ## Storage
 
+**Is the TV on?** Each television checks in about once a minute. The TV bar in the editor then shows "Online, seen 1 min ago" or "Offline, last seen ...". This needs the table in `schema/status.sql`, run once in the Neon SQL editor. Until then the indicator stays hidden and nothing else changes. Each TV also reloads itself quietly once a night, around 3 AM Akron time, so a screen that runs for weeks stays quick. Add `?noreload=1` to the TV address to turn that off.
+
 Named layouts and the last 30 online saves live in Neon tables `public.layouts` and `public.board_history`. Only a signed-in editor can read or change them. The television does not use those tables. The SQL is in `schema/archive.sql`.
 
 Save writes every television into one online board. The television reads that board on its own, about every 30 seconds, and changes the picture without reloading. A copy stays in this browser, so the last layout keeps showing if the network drops.
@@ -80,15 +104,15 @@ Pictures, logos, and PDF flyers upload into the public media bucket. The layout 
 
 `config.json` is the fallback until the first online save, and when a television is set to the published file only.
 
-The pages also register a small service worker so the board can keep running after it has loaded once, even if the network blips. The first visit still needs a connection, for the fonts and, if you use a PDF, for PDF.js.
+The pages also register a small service worker so the board can keep running after it has loaded once, even if the network blips. Fonts (in `vendor/fonts`, from Fontsource under the SIL Open Font License) and PDF.js (in `vendor/pdfjs`) are stored with the site, so a TV does not depend on Google Fonts or a CDN. A browser only downloads the font files the board actually uses.
 
 ## Limits
 
 - The first online save has to be made by a signed-in editor. Until then, the television keeps the published layout.
 - A new picture or flyer needs that same sign-in. The upload does not stay only on the phone.
 - Very large photo libraries make a large export file. Prefer a modest set for a lobby slideshow.
-- Google Photos albums cannot be linked. Use uploads or Drive file links.
-- PDF pages are drawn with PDF.js from a CDN, so the first open of a flyer needs a network. After that the service worker can reuse it.
+- PDF pages are drawn with PDF.js, stored with the site.
+- Google Photos copies the pictures you pick. It does not follow an album as it changes.
 - Zmanim follow Hebcal's sunrise and sunset. They are not a posek.
 - Sample events in the published layout are the real candle-lighting times for 20 and 27 November 2026, plus Shabbat day. Replace them with the week's programs.
 - The full-screen sample text is an example and is turned off.

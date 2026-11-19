@@ -177,3 +177,28 @@ export async function uploadMedia(token, file) {
   if (!put.ok) throw new Error('The file did not finish uploading.');
   return { url: body.publicUrl, key: body.key };
 }
+
+// Each television reports in about once a minute so the editor can say when it
+// was last seen. The table is in schema/status.sql. If it is not set up yet,
+// these calls fail quietly and the board keeps working.
+export async function pingTv(token, tvId, info) {
+  const response = await fetch(`${DATA_API}/rpc/tv_ping`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ p_tv: String(tvId || '').slice(0, 40), p_info: info || {} }),
+  });
+  return response.ok;
+}
+
+export async function readTvStatus(token) {
+  const response = await fetch(
+    `${DATA_API}/tv_status?select=tv_id,last_seen,info`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) return { ok: false, rows: [] };
+  const rows = await response.json().catch(() => []);
+  return { ok: true, rows: Array.isArray(rows) ? rows : [] };
+}

@@ -1,4 +1,5 @@
-// Google Photos shared albums cannot be read from a static page.
+// Google Photos shared album links cannot be read from a static page. The
+// editor uses Google's Photos Picker instead (js/gphotos.js).
 // Uploads and direct image addresses work. Public Google Drive file links
 // are rewritten to a lh3 image address, which a plain <img> can show.
 
@@ -46,4 +47,4 @@ export function classifyImageList(text) {
 }
 
 export const PHOTOS_HELP =
-  'Upload pictures, paste image addresses, or point this piece at a Google Drive folder. A Google Photos album link still cannot be read from this page. A single Drive file that is shared as "anyone with the link" can be pasted as an image address.';
+  'Upload pictures, choose them from Google Photos (an album too), paste image addresses, or point this piece at a Google Drive folder. A Google Photos album link pasted as text cannot be read, so use the Google Photos button below instead.';

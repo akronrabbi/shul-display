@@ -1,6 +1,7 @@
-import { anonymousToken, boardHasLayout, readBoard } from './cloud.js';
+import { anonymousToken, boardHasLayout, pingTv, readBoard } from './cloud.js';
 import { applyTheme } from './themes.js';
-import { createCalendar } from './calendar.js';
+import { createCalendar, zoneParts } from './calendar.js';
+import { inDateRange } from './events.js';
 import { frameSize, normalizeConfig, pickTv } from './model.js';
 import { createStorage } from './storage.js';
 import { mountWidget, renderTakeover, takeoverActive } from './widgets.js';
@@ -28,13 +29,6 @@ let disposers = [];
 const params = new URLSearchParams(location.search);
 const forcedSource = params.get('source');
 
-function clearMounts() {
-  disposers.forEach((fn) => {
-    try { fn(); } catch { /* already gone */ }
-  });
-  disposers = [];
-}
-
 function board() {
   return pickTv(config, params.get('tv'));
 }
@@ -61,20 +55,40 @@ function fitFrame() {
   frame.style.transform = `translate(-50%, -50%) rotate(${box.rotate}deg)`;
 }
 
-function screenIndex(now) {
+function shabbosSettingsOf(tv) {
+  for (const screen of tv?.screens || []) {
+    const found = (screen.widgets || []).find((widget) => widget.type === 'shabbos');
+    if (found) return found.settings;
+  }
+  return {};
+}
+
+// Which screen is up now. Shabbos mode, when an editor turned it on, wins
+// from shortly before candle lighting until shortly after havdalah.
+function pickScreen(now) {
   const current = board();
   const screens = current?.screens || [];
-  if (screens.length < 2 || !current.cycleScreens) {
-    return Math.min(Math.max(screens.length - 1, 0), Math.max(0, current?.activeScreen || 0));
+  const mode = current?.shabbosMode;
+  const restScreen = mode?.enabled ? screens.find((screen) => screen.id === mode.screenId) : null;
+  if (restScreen && calendar) {
+    const rest = calendar.restWindow(now, shabbosSettingsOf(current), mode);
+    if (rest?.active) return { screen: restScreen, index: screens.indexOf(restScreen), rest: true };
   }
-  const durations = screens.map((screen) => Math.max(5, Number(screen.duration) || 20));
+  let pool = screens.map((screen, index) => ({ screen, index }));
+  if (restScreen && pool.length > 1) pool = pool.filter((item) => item.screen !== restScreen);
+  if (pool.length < 2 || !current.cycleScreens) {
+    const wanted = Math.max(0, current?.activeScreen || 0);
+    const pick = pool.find((item) => item.index === wanted) || pool[0];
+    return pick ? { ...pick, rest: false } : { screen: { widgets: [] }, index: 0, rest: false };
+  }
+  const durations = pool.map((item) => Math.max(5, Number(item.screen.duration) || 20));
   const total = durations.reduce((sum, value) => sum + value, 0);
   let cursor = Math.floor(now.getTime() / 1000) % total;
-  for (let i = 0; i < screens.length; i += 1) {
+  for (let i = 0; i < pool.length; i += 1) {
     cursor -= durations[i];
-    if (cursor < 0) return i;
+    if (cursor < 0) return { ...pool[i], rest: false };
   }
-  return 0;
+  return { ...pool[0], rest: false };
 }
 
 function makeCtx(screen) {
@@ -103,6 +117,53 @@ function placeOf(widget, orientation) {
   return widget.place?.[orientation] || widget.place?.landscape || widget.place?.portrait || { x: 4, y: 4, w: 30, h: 20 };
 }
 
+let layer = null;
+
+function buildShells(host, widgets, orientation) {
+  const shells = [];
+  for (const widget of widgets) {
+    const shell = document.createElement('div');
+    const place = placeOf(widget, orientation);
+    shell.className = `widget tone-${widget.settings?.tone || 'ivory'}`;
+    shell.style.left = `${place.x}%`;
+    shell.style.top = `${place.y}%`;
+    shell.style.width = `${place.w}%`;
+    shell.style.height = `${place.h}%`;
+    const body = document.createElement('div');
+    body.className = 'widget-body';
+    shell.append(body);
+    host.append(shell);
+    shells.push({ shell, body, widget });
+  }
+  return shells;
+}
+
+// The next screen is drawn on a hidden layer above the old one, then faded in,
+// so the TV never flashes an empty frame between screens.
+function swapLayer(next, nextDisposers, transition) {
+  const oldLayer = layer;
+  const oldDisposers = disposers;
+  layer = next;
+  disposers = nextDisposers;
+  stage.dataset.move = transition;
+  const finish = () => {
+    oldDisposers.forEach((fn) => {
+      try { fn(); } catch { /* already gone */ }
+    });
+    if (oldLayer) oldLayer.remove();
+  };
+  if (transition === 'none' || !oldLayer) {
+    next.classList.remove('entering');
+    finish();
+    return;
+  }
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    next.classList.remove('entering');
+    oldLayer.classList.add('leaving');
+  }));
+  setTimeout(finish, 1300);
+}
+
 async function paint() {
   if (!calendar || !config) return;
   const now = new Date();
@@ -113,63 +174,52 @@ async function paint() {
   applyTheme(document.querySelector('.bezel'), current.theme);
   fitFrame();
   const showTakeover = takeoverActive(current.takeover, now, force);
-  const index = screenIndex(now);
-  const screen = (current.screens || [])[index] || { widgets: [] };
+  const picked = pickScreen(now);
+  const screen = picked.screen;
+  const widgets = (screen.widgets || []).filter((widget) => inDateRange(widget, now));
   const key = JSON.stringify({
     tv: current.id,
     showTakeover,
-    index,
+    index: picked.index,
     orientation,
-    widgets: screen.widgets,
-    takeover: current.takeover,
+    widgets,
+    takeover: showTakeover ? current.takeover : null,
     force,
   });
   if (key === currentKey) return;
   currentKey = key;
+  currentScreenName = screen.name || '';
   const my = ++token;
+  const next = document.createElement('div');
+  next.className = 'stage-layer entering';
+  stage.append(next);
+  const nextDisposers = [];
+  const abandon = () => {
+    nextDisposers.forEach((fn) => {
+      try { fn(); } catch { /* ignore */ }
+    });
+    next.remove();
+  };
+  const ctx = makeCtx(screen);
   if (showTakeover) {
-    const holder = document.createElement('div');
-    const dispose = await renderTakeover(holder, current.takeover || {}, makeCtx(screen));
-    if (my !== token) {
-      dispose();
-      return;
-    }
-    clearMounts();
-    slot.replaceChildren(...holder.childNodes);
-    slot.hidden = false;
-    stage.replaceChildren();
-    disposers.push(dispose);
+    const dispose = await renderTakeover(next, current.takeover || {}, ctx);
+    nextDisposers.push(dispose);
   } else {
-    const shells = [];
-    for (const widget of screen.widgets || []) {
-      const shell = document.createElement('div');
-      const place = placeOf(widget, orientation);
-      shell.className = `widget tone-${widget.settings?.tone || 'ivory'}`;
-      shell.style.left = `${place.x}%`;
-      shell.style.top = `${place.y}%`;
-      shell.style.width = `${place.w}%`;
-      shell.style.height = `${place.h}%`;
-      const body = document.createElement('div');
-      body.className = 'widget-body';
-      shell.append(body);
-      shells.push({ shell, body, widget });
-    }
-    if (my !== token) return;
-    clearMounts();
-    slot.hidden = true;
-    slot.replaceChildren();
-    stage.replaceChildren(...shells.map((item) => item.shell));
-    const ctx = makeCtx(screen);
+    const shells = buildShells(next, widgets, orientation);
     for (const item of shells) {
-      if (my !== token) return;
-      const dispose = await mountWidget(item.body, item.widget, ctx);
       if (my !== token) {
-        dispose();
+        abandon();
         return;
       }
-      disposers.push(dispose);
+      nextDisposers.push(await mountWidget(item.body, item.widget, ctx));
     }
   }
+  if (my !== token) {
+    abandon();
+    return;
+  }
+  stage.querySelectorAll('.boot-error').forEach((node) => node.remove());
+  swapLayer(next, nextDisposers, current.transition || 'fade');
   window.__ready = true;
 }
 
@@ -279,7 +329,42 @@ document.getElementById('fullscreen').addEventListener('click', () => {
   else document.exitFullscreen();
 });
 
+let currentScreenName = '';
+const startedAt = new Date();
+
+async function heartbeat() {
+  const current = board();
+  if (!current || !navigator.onLine) return;
+  try {
+    const pass = await anonymousToken();
+    await pingTv(pass, current.id, {
+      screen: currentScreenName,
+      width: String(window.screen?.width || window.innerWidth || ''),
+      height: String(window.screen?.height || window.innerHeight || ''),
+      source: forcedSource || source,
+      started: startedAt.toISOString(),
+    });
+  } catch {
+    // The status table may not exist yet. The board does not depend on it.
+  }
+}
+
+// A television can run for weeks. A quiet reload once a night, around 3 AM in
+// Akron, clears anything that built up. The service worker keeps a copy, so
+// this is safe even if the network is down at that moment.
+function nightlyRefresh() {
+  if (params.get('noreload') === '1') return;
+  const uptime = Date.now() - startedAt.getTime();
+  const akron = zoneParts(new Date());
+  if (akron.hour === 3 && akron.minute < 15 && uptime > 2 * 60 * 60 * 1000) {
+    location.reload();
+  }
+}
+
 window.addEventListener('resize', () => fitFrame());
+setInterval(heartbeat, 60000);
+setTimeout(heartbeat, 8000);
+setInterval(nightlyRefresh, 60000);
 setInterval(() => { paint(); }, 1000);
 setInterval(() => { pollCloud(); }, 30000);
 

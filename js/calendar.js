@@ -196,6 +196,44 @@ export function createCalendar(lib) {
     });
   }
 
+  // The Shabbos or Yom Tov that is on now, or about to start, with its start and
+  // end as instants. Uses the same candle lighting and havdalah as the board.
+  function restWindow(now, rawSettings, { before = 0, after = 0, yomTov = true } = {}) {
+    const settings = normalizeShabbosSettings(rawSettings);
+    const minute = Math.floor(now.getTime() / 60000);
+    const key = ['rw', minute, settings.candleLightingMins, settings.havdalahMode, settings.havdalahMins, settings.havdalahDeg, before, after, yomTov].join(':');
+    return memo(key, () => {
+      const options = {
+        start: new Date(now.getTime() - 4 * 86400000),
+        end: new Date(now.getTime() + 9 * 86400000),
+        candlelighting: true,
+        location,
+        candleLightingMins: settings.candleLightingMins,
+      };
+      if (settings.havdalahMode === 'minutes') options.havdalahMins = settings.havdalahMins;
+      else options.havdalahDeg = settings.havdalahDeg;
+      const events = lib.HebrewCalendar.calendar(options);
+      const candles = events
+        .filter((ev) => ev.getDesc() === 'Candle lighting' && ev.eventTime)
+        .sort((a, b) => a.eventTime - b.eventTime);
+      const havdalahs = events
+        .filter((ev) => ev.getDesc() === 'Havdalah' && ev.eventTime)
+        .sort((a, b) => a.eventTime - b.eventTime);
+      const time = now.getTime();
+      for (const candle of candles) {
+        const havdalah = havdalahs.find((item) => item.eventTime.getTime() > candle.eventTime.getTime());
+        if (!havdalah) continue;
+        const friday = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(candle.eventTime) === 'Fri';
+        if (!friday && !yomTov) continue;
+        const start = candle.eventTime.getTime() - Math.max(0, Number(before) || 0) * 60000;
+        const end = havdalah.eventTime.getTime() + Math.max(0, Number(after) || 0) * 60000;
+        if (time > end) continue;
+        return { start: new Date(start), end: new Date(end), active: time >= start, kind: friday ? 'shabbos' : 'yomtov' };
+      }
+      return null;
+    });
+  }
+
   function zmanim(now) {
     const minute = Math.floor(now.getTime() / 60000);
     return memo('z:' + minute, () => {
@@ -221,6 +259,7 @@ export function createCalendar(lib) {
     formatLong,
     hebrew,
     shabbos,
+    restWindow,
     zmanim,
     location,
   };

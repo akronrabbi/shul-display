@@ -42,11 +42,175 @@ export const FONT_PAIRINGS = [
     body: '"Outfit", "Segoe UI", sans-serif',
     hebrew: '"Noto Serif Hebrew", "Times New Roman", serif',
   },
+  {
+    id: 'clean',
+    label: 'Clean modern',
+    note: 'Inter throughout, with Heebo for Hebrew. Crisp and quiet',
+    heading: '"Inter", "Segoe UI", sans-serif',
+    body: '"Inter", "Segoe UI", sans-serif',
+    hebrew: '"Heebo", "Arial Hebrew", sans-serif',
+  },
+  {
+    id: 'contemporary',
+    label: 'Contemporary',
+    note: 'Outfit headings over Inter, with Heebo for Hebrew',
+    heading: '"Outfit", "Segoe UI", sans-serif',
+    body: '"Inter", "Segoe UI", sans-serif',
+    hebrew: '"Heebo", "Arial Hebrew", sans-serif',
+  },
+  {
+    id: 'refined',
+    label: 'Refined serif',
+    note: 'A modern serif heading over Inter',
+    heading: '"Fraunces", Palatino, "Times New Roman", serif',
+    body: '"Inter", "Segoe UI", sans-serif',
+    hebrew: '"Frank Ruhl Libre", "Times New Roman", serif',
+  },
+];
+
+// How cards are drawn. Solid is the original look. Glass is frosted and see-through.
+// Line is a quiet card with a thin edge and no top rule.
+export const CARD_STYLES = [
+  { id: 'solid', label: 'Solid' },
+  { id: 'glass', label: 'Frosted glass' },
+  { id: 'line', label: 'Minimal line' },
 ];
 
 const GROUNDS = ['solid', 'gradient', 'texture'];
 
 export const PRESETS = [
+  {
+    id: 'midnight',
+    label: 'Midnight Glass',
+    font: 'clean',
+    ground: 'gradient',
+    cards: 'glass',
+    radius: 20,
+    shadow: '0 24px 60px rgba(0, 0, 0, 0.35)',
+    bg: '#060a14',
+    bg2: '#141d36',
+    wash: '#3b5bdb',
+    glow: '#b08a3e',
+    washAlpha: 0.22,
+    glowAlpha: 0.18,
+    surface: '#ffffff',
+    surface2: '#f1f3f8',
+    surfaceInk: '#10141f',
+    muted: '#5b6375',
+    inverse: '#131a2c',
+    inverse2: '#0b1020',
+    inverseInk: '#f4f6fb',
+    inverseMuted: '#b9c1d3',
+    accent: '#d9b56a',
+    accent2: '#b8913f',
+    accentInk: '#16110a',
+    accentMuted: '#4c3c1c',
+    rule: '#d9b56a',
+    ruleOnDark: '#e8cf97',
+    ruleOnAccent: '#5c4316',
+    eyebrow: '#9a7428',
+    eyebrowOnDark: '#e8cf97',
+    frame: 'rgba(255, 255, 255, 0.08)',
+  },
+  {
+    id: 'sapphire',
+    label: 'Sapphire',
+    font: 'contemporary',
+    ground: 'gradient',
+    cards: 'glass',
+    radius: 18,
+    shadow: '0 24px 60px rgba(2, 10, 30, 0.35)',
+    bg: '#081830',
+    bg2: '#123a6e',
+    wash: '#6aa2ff',
+    glow: '#020814',
+    washAlpha: 0.2,
+    glowAlpha: 0.5,
+    surface: '#ffffff',
+    surface2: '#eef3fb',
+    surfaceInk: '#0d1b30',
+    muted: '#53627a',
+    inverse: '#0e2546',
+    inverse2: '#081830',
+    inverseInk: '#f3f7fd',
+    inverseMuted: '#bccbe2',
+    accent: '#e6c578',
+    accent2: '#c9a24f',
+    accentInk: '#17120a',
+    accentMuted: '#4e3f1d',
+    rule: '#e6c578',
+    ruleOnDark: '#f0dba8',
+    ruleOnAccent: '#5c4316',
+    eyebrow: '#1f5fbf',
+    eyebrowOnDark: '#f0dba8',
+    frame: 'rgba(255, 255, 255, 0.1)',
+  },
+  {
+    id: 'graphite',
+    label: 'Graphite',
+    font: 'clean',
+    ground: 'solid',
+    cards: 'line',
+    radius: 18,
+    shadow: '0 18px 40px rgba(0, 0, 0, 0.28)',
+    bg: '#111317',
+    bg2: '#1a1d23',
+    wash: '#ffffff',
+    glow: '#000000',
+    washAlpha: 0.04,
+    glowAlpha: 0.2,
+    surface: '#1b1f26',
+    surface2: '#181b21',
+    surfaceInk: '#f2f3f5',
+    muted: '#a3a9b4',
+    inverse: '#242a33',
+    inverse2: '#1f242c',
+    inverseInk: '#f2f3f5',
+    inverseMuted: '#a9b0bb',
+    accent: '#d4af64',
+    accent2: '#b9933f',
+    accentInk: '#15110a',
+    accentMuted: '#4a3a1a',
+    rule: '#d4af64',
+    ruleOnDark: '#d4af64',
+    ruleOnAccent: '#4a3a1a',
+    eyebrow: '#d4af64',
+    eyebrowOnDark: '#d4af64',
+    frame: 'rgba(255, 255, 255, 0.08)',
+  },
+  {
+    id: 'gallery',
+    label: 'Gallery White',
+    font: 'contemporary',
+    ground: 'solid',
+    cards: 'line',
+    radius: 18,
+    shadow: '0 18px 40px rgba(20, 24, 32, 0.07)',
+    bg: '#f3f2ee',
+    bg2: '#e9e7e1',
+    wash: '#ffffff',
+    glow: '#d8d4ca',
+    washAlpha: 0.5,
+    glowAlpha: 0.3,
+    surface: '#ffffff',
+    surface2: '#ffffff',
+    surfaceInk: '#15181e',
+    muted: '#5d636e',
+    inverse: '#15181e',
+    inverse2: '#15181e',
+    inverseInk: '#f6f5f2',
+    inverseMuted: '#b8bcc4',
+    accent: '#1f3a5f',
+    accent2: '#16304f',
+    accentInk: '#f4f6f9',
+    accentMuted: '#c9d4e3',
+    rule: '#1f3a5f',
+    ruleOnDark: '#d8c08a',
+    ruleOnAccent: '#d8c08a',
+    eyebrow: '#8a6a2c',
+    eyebrowOnDark: '#d8c08a',
+    frame: 'rgba(21, 24, 30, 0.08)',
+  },
   {
     id: 'warm-classic',
     label: 'Warm Classic',
@@ -360,7 +524,7 @@ function rgba(hex, alpha) {
 }
 
 export function presetById(id) {
-  return PRESETS.find((item) => item.id === id) || PRESETS[0];
+  return PRESETS.find((item) => item.id === id) || PRESETS.find((item) => item.id === 'warm-classic');
 }
 
 export function fontById(id) {
@@ -368,13 +532,16 @@ export function fontById(id) {
 }
 
 export function normalizeTheme(raw) {
-  const preset = presetById(raw?.preset);
+  // Old layouts have no preset and stay on Warm Classic, which used to be first.
+  const preset = raw?.preset ? presetById(raw.preset) : presetById('warm-classic');
   const font = FONT_PAIRINGS.some((item) => item.id === raw?.font) ? raw.font : preset.font;
   const ground = GROUNDS.includes(raw?.ground) ? raw.ground : preset.ground;
+  const cards = CARD_STYLES.some((item) => item.id === raw?.cards) ? raw.cards : (preset.cards || 'solid');
   return {
     preset: preset.id,
     font,
     ground,
+    cards,
     accent: isHex(raw?.accent) ? raw.accent : null,
     background: isHex(raw?.background) ? raw.background : null,
   };
@@ -443,6 +610,12 @@ export function resolveTheme(raw) {
     '--sans': font.body,
     '--hebrew': font.hebrew,
     '--scrim': `linear-gradient(180deg, ${rgba(bg, 0.15)} 0%, ${rgba(bg, 0.82)} 78%)`,
+    '--glass-bg': stage === 'dark' ? 'rgba(255, 255, 255, 0.075)' : 'rgba(255, 255, 255, 0.62)',
+    '--glass-bg-2': stage === 'dark' ? 'rgba(0, 0, 0, 0.28)' : 'rgba(255, 255, 255, 0.82)',
+    '--glass-ink': stageInk,
+    '--glass-muted': stage === 'dark' ? 'rgba(244, 246, 251, 0.68)' : 'rgba(21, 24, 30, 0.62)',
+    '--glass-line': stage === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(21, 24, 30, 0.08)',
+    '--glass-eyebrow': stage === 'dark' ? preset.eyebrowOnDark : preset.eyebrow,
   };
   return { ...theme, stage, label: preset.label, vars };
 }
@@ -452,6 +625,7 @@ export function applyTheme(element, raw) {
   const resolved = resolveTheme(raw);
   element.dataset.stage = resolved.stage;
   element.dataset.ground = resolved.ground;
+  element.dataset.cards = resolved.cards;
   element.dataset.preset = resolved.preset;
   element.dataset.logo = luminance(resolved.vars['--bg']) < 0.008 ? 'plate' : 'bare';
   Object.entries(resolved.vars).forEach(([key, value]) => {

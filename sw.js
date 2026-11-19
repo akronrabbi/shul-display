@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v6';
+const CACHE = 'shul-display-v7';
 const FILES = [
   './',
   './index.html',
@@ -21,6 +21,17 @@ const FILES = [
   './js/drive.js',
   './js/display.js',
   './js/editor.js',
+  './js/templates.js',
+  './js/gphotos.js',
+  './vendor/fonts/fonts.css',
+  './vendor/fonts/files/inter-latin-wght-normal.woff2',
+  './vendor/fonts/files/heebo-hebrew-wght-normal.woff2',
+  './vendor/fonts/files/fraunces-latin-wght-normal.woff2',
+  './vendor/fonts/files/source-sans-3-latin-wght-normal.woff2',
+  './vendor/fonts/files/noto-serif-hebrew-hebrew-wght-normal.woff2',
+  './vendor/fonts/files/outfit-latin-wght-normal.woff2',
+  './vendor/pdfjs/pdf.min.mjs',
+  './vendor/pdfjs/pdf.worker.min.mjs',
   './assets/akron-shul-logo.png',
   './vendor/hebcal/hebcal-core.min.js',
 ];
