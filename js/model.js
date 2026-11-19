@@ -49,6 +49,12 @@ export function normalizeTv(tv, fallbackName) {
     next.screens = [{ id: 'main', name: 'Main', duration: 30, widgets: [] }];
   }
   next.screens = next.screens.map((screen) => normalizeScreen(screen));
+  // The screen the TV shows when it is not cycling. Older boards used the tab
+  // that was open in the editor when they were saved, so start from that.
+  const ids = next.screens.map((screen) => screen.id);
+  if (!ids.includes(next.liveScreen)) {
+    next.liveScreen = ids[Math.min(ids.length - 1, Math.max(0, Number(next.activeScreen) || 0))];
+  }
   next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
   next.theme = normalizeTheme(next.theme);
   next.transition = SCREEN_TRANSITIONS.some(([id]) => id === next.transition) ? next.transition : 'fade';

@@ -9,7 +9,7 @@ import { explainDriveError, listDriveFolderImages } from './drive.js';
 import { inDateRange, isCurrentEvent } from './events.js';
 import { readTvStatus } from './cloud.js';
 import { TEMPLATES, applyTemplate } from './templates.js';
-import { connectPhotos, downloadPhoto, endPickSession, photosConnected, pickPhotos } from './gphotos.js';
+import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosAccount, photosConnected, pickPhotos } from './gphotos.js';
 import {
   PHOTO_TRANSITIONS,
   WIDGET_TYPES,
@@ -1329,14 +1329,24 @@ function buildGooglePhotos(settings) {
       run.disabled = true;
       try {
         if (!photosConnected()) {
-          message.textContent = 'Opening Google...';
+          message.textContent = 'Opening Google. Choose the Google account that has the photos.';
           await connectPhotos(google.photosClientId);
-          message.textContent = 'Connected. Press the button again to choose photos.';
-          run.textContent = 'Choose photos from Google Photos';
+          buildInspector();
           return;
         }
         message.textContent = 'Opening Google Photos...';
-        const picked = await pickPhotos({ onStatus: (text) => { message.textContent = text; } });
+        const cancel = { stopped: false };
+        const stop = actionButton('Stop waiting', () => {
+          cancel.stopped = true;
+          stop.remove();
+        });
+        message.after(stop);
+        let picked;
+        try {
+          picked = await pickPhotos({ cancel, onStatus: (text) => { message.textContent = text; } });
+        } finally {
+          stop.remove();
+        }
         let added = 0;
         let failed = 0;
         for (const item of picked.items) {
@@ -1361,12 +1371,29 @@ function buildGooglePhotos(settings) {
         setStatus(summary, 'dirty');
         buildInspector();
       } catch (error) {
-        message.textContent = error.message || 'Google Photos did not finish.';
+        message.textContent = `${error.message || 'Google Photos did not finish.'} If Google said "Couldn't add photos", press Use a different Google account and pick the account that has the photos, then try again.`;
       } finally {
         run.disabled = false;
       }
     });
     box.append(run);
+    if (photosConnected()) {
+      const who = photosAccount();
+      box.append(el('p', 'note gphotos-account', who
+        ? `Connected as ${who}. Google's photo window opens in this account. If this browser is signed in to more than one Google account, make sure the photos are in this one.`
+        : 'Connected to Google Photos.'));
+      box.append(actionButton('Use a different Google account', async () => {
+        disconnectPhotos();
+        message.textContent = 'Opening Google. Choose the account that has the photos.';
+        try {
+          await connectPhotos(google.photosClientId, { chooseAccount: true });
+        } catch (error) {
+          message.textContent = error.message || 'Google sign-in did not finish.';
+          return;
+        }
+        buildInspector();
+      }));
+    }
     const change = actionButton('Change client ID', () => {
       editingClientId = true;
       buildInspector();
@@ -1409,10 +1436,40 @@ function buildPdfForm(settings) {
   inspector.append(field('Seconds on each page', numberInput(settings.interval, (value) => { settings.interval = Number(value); })));
 }
 
+function liveScreenId() {
+  const board = tv();
+  const ids = board.screens.map((item) => item.id);
+  if (ids.includes(board.liveScreen)) return board.liveScreen;
+  return ids[Math.min(ids.length - 1, Math.max(0, Number(board.activeScreen) || 0))];
+}
+
 function buildScreenForm() {
   const current = screen();
+  const board = tv();
   inspector.append(el('h2', 'side-title', 'This screen'));
-  inspector.append(el('p', 'hint', 'This is the board the TV will show. Add pieces from the left. You can make more than one screen and cycle through them.'));
+  inspector.append(el('p', 'hint', 'Editing a screen does not change which one the TV shows. Add pieces from the left.'));
+  const onTv = el('div', 'live-box');
+  if (board.cycleScreens && board.screens.length > 1) {
+    onTv.append(el('strong', '', 'The TV cycles through every screen.'));
+    onTv.append(el('p', 'note', 'Turn off "Cycle through screens" to show just one.'));
+  } else if (current.id === liveScreenId()) {
+    onTv.classList.add('is-live');
+    onTv.append(el('strong', '', 'This screen is on the TV.'));
+    if (board.screens.length > 1) onTv.append(el('p', 'note', 'To show another one, open its tab and press Show this screen on the TV.'));
+  } else {
+    const liveName = board.screens.find((item) => item.id === liveScreenId())?.name || 'another screen';
+    onTv.append(el('p', 'note', `The TV shows "${liveName}". This screen is not on the TV.`));
+    const show = actionButton('Show this screen on the TV', () => {
+      board.liveScreen = current.id;
+      markDirty();
+      paintChrome();
+      buildInspector();
+      setStatus(`"${current.name || 'This screen'}" will be on the TV after you Save.`, 'dirty');
+    });
+    show.classList.add('btn-primary');
+    onTv.append(show);
+  }
+  inspector.append(onTv);
   const name = document.createElement('input');
   name.type = 'text';
   name.value = current.name || '';
@@ -2086,8 +2143,18 @@ function paintChrome() {
   const rotate = document.getElementById('tv-rotate');
   if (rotate && document.activeElement !== rotate) rotate.value = String(tv().rotation || 0);
   tabs.replaceChildren();
-  tv().screens.forEach((item, index) => {
-    const button = el('button', `tab${index === tv().activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
+  const board = tv();
+  const live = liveScreenId();
+  board.screens.forEach((item, index) => {
+    const button = el('button', `tab${index === board.activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
+    if (!board.cycleScreens && item.id === live) {
+      button.classList.add('live');
+      button.title = 'This is the screen on the TV';
+      button.append(el('span', 'live-dot', 'On TV'));
+    }
+    if (board.shabbosMode?.enabled && item.id === board.shabbosMode.screenId) {
+      button.append(el('span', 'live-dot shabbos', 'Shabbos'));
+    }
     button.type = 'button';
     button.addEventListener('click', () => {
       tv().activeScreen = index;
@@ -2334,6 +2401,8 @@ function bindChrome() {
   document.getElementById('cycle').addEventListener('change', (event) => {
     tv().cycleScreens = event.target.checked;
     markDirty();
+    paintChrome();
+    if (mode === 'screen' && !selectedId) buildInspector();
   });
   document.getElementById('tv-rotate').addEventListener('change', (event) => {
     tv().rotation = Number(event.target.value) || 0;

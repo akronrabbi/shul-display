@@ -50,7 +50,7 @@ Under "Where the TV looks":
 - **Only this computer** ignores the online board.
 - **Only the published file** always uses `config.json` from the website.
 
-You can add more than one screen and turn on **Cycle through screens**. Each screen has its own pieces. The words are not copied when you add a screen. Cycling only happens when that box is on, and only if you have more than one screen.
+When **Cycle through screens** is off, the TV shows one screen: the one marked **On TV** on its tab. Open another screen and press **Show this screen on the TV** (Screen settings) to change it, then Save. Opening a tab to edit it does not change the TV. You can add more than one screen and turn on **Cycle through screens**. Each screen has its own pieces. The words are not copied when you add a screen. Cycling only happens when that box is on, and only if you have more than one screen.
 
 **Rotate design to fit screen** is separate. Use it when the television is a landscape screen mounted on its side and the computer itself cannot be set to portrait. Off leaves the design as designed. 90° right, 180°, and 90° left turn the design. The link for that TV includes the turn, for example `?rotate=90`.
 
@@ -70,7 +70,7 @@ Checked against Hebcal for the week of 18 November 2026: Wednesday daytime is 8 
 
 Upload pictures, or paste direct image addresses, one per line. A single Google Drive file shared as "anyone with the link" can be pasted as the Drive link. The editor turns it into an image address.
 
-**Google Photos** works through Google's Photos Picker. Press **Choose photos from Google Photos** in the Photos piece, pick pictures (to use an album, open it in the Google window and select its pictures), and press Done. The editor copies them into this board's media storage, so the TV never needs Google. To add new ones later, pick again. This needs a one-time Google client ID, and the steps are in the Photos piece: turn on the Google Photos Picker API, create an OAuth client ID of type Web application with `https://akronrabbi.github.io` as an authorized JavaScript origin, and add each editor as a test user. A pasted album link still cannot be read; Google ended that on 31 March 2025.
+**Google Photos** works through Google's Photos Picker. The Photos piece says which Google account is connected, and Google's window opens in that account; **Use a different Google account** switches. If Google says "Couldn't add photos", connect again with the account that has the photos. Press **Choose photos from Google Photos** in the Photos piece, pick pictures (to use an album, open it in the Google window and select its pictures), and press Done. The editor copies them into this board's media storage, so the TV never needs Google. To add new ones later, pick again. This needs a one-time Google client ID, and the steps are in the Photos piece: turn on the Google Photos Picker API, create an OAuth client ID of type Web application with `https://akronrabbi.github.io` as an authorized JavaScript origin, and add each editor as a test user. A pasted album link still cannot be read; Google ended that on 31 March 2025.
 
 A whole Drive folder works too. Share the folder as Anyone with the link, paste the folder link, and paste a Google API key locked to `https://akronrabbi.github.io/*` and to the Drive API only. The steps are in the photo piece. The TV asks Google for the picture list about every 10 minutes, so new pictures show up on their own. The key is stored with the layout. Restrict it, because anyone who can view the page can see it.
 
