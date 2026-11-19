@@ -78,7 +78,7 @@ export const TYPE_PARTS = {
   ],
   text: [
     { id: 'title', label: 'Title', open: true },
-    { id: 'body', label: 'Main text' },
+    { id: 'body', label: 'Main text', para: true },
     { id: 'small', label: 'Small heading' },
   ],
   zmanim: [
@@ -93,6 +93,9 @@ export const TYPE_PARTS = {
     { id: 'small', label: 'Small text' },
   ],
 };
+
+// Pieces whose words are fitted to their box, so Fill the box / Exact size applies.
+export const FIT_TYPES = ['welcome', 'events', 'text', 'zmanim', 'takeover'];
 
 export function fixedSize(type) {
   return type?.fit === 'fixed';

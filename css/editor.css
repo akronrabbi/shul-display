@@ -1140,3 +1140,7 @@ body.is-dragging .screen-canvas::after { opacity: 1; }
   padding: 8px 10px;
   background: var(--ui-panel);
 }
+
+.size-row .btn.mini { padding: 4px 8px; font-size: 12px; }
+.size-row input[type="range"].unset { opacity: 0.4; }
+.size-row > span { color: var(--ui-muted); font-size: 12px; min-width: 1.4em; }

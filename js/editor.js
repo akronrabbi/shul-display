@@ -2,7 +2,7 @@ import { createCalendar } from './calendar.js';
 import { authReady, currentUser, editorToken, sendEmailCode, signInWithCode, signInWithGoogle, signOut } from './auth.js';
 import { SCREEN_TRANSITIONS, blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { CARD_STYLES, FONT_PAIRINGS, PRESETS, applyTheme, normalizeTheme, resolveTheme } from './themes.js';
-import { MAX_EXTRA_FONTS, TEXT_FONTS, TYPE_PARTS, canonicalFont, extraFontsUsed, setFit, setPart } from './type.js';
+import { FIT_TYPES, MAX_EXTRA_FONTS, TEXT_FONTS, TYPE_PARTS, canonicalFont, extraFontsUsed, setFit, setPart } from './type.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { explainDriveError, listDriveFolderImages } from './drive.js';
@@ -815,7 +815,13 @@ function buildThemeForm() {
   fillThemeControls(inspector);
 }
 
+let inspectorKey = '';
+
 function buildInspector() {
+  const key = `${mode}:${selectedId || ''}:${state.activeTv}:${tv().activeScreen}`;
+  const keepScroll = key === inspectorKey ? inspector.scrollTop : 0;
+  inspectorKey = key;
+  requestAnimationFrame(() => { inspector.scrollTop = keepScroll; });
   inspector.replaceChildren();
   if (mode === 'theme') {
     buildThemeForm();
@@ -963,7 +969,7 @@ function buildInspector() {
   } else {
     inspector.append(field('Color', selectInput(settings.tone, toneChoices('welcome'), (value) => { settings.tone = value; })));
   }
-  appendTypePanel(settings, TYPE_PARTS[widget.type] || [], () => refreshWidget(widget.id));
+  appendTypePanel(settings, TYPE_PARTS[widget.type] || [], () => refreshWidget(widget.id), FIT_TYPES.includes(widget.type));
   inspector.append(dateRangeBlock(widget, () => renderCanvas()));
 
   const order = el('div', 'tool-group');
@@ -1579,28 +1585,99 @@ function buildTemplatesForm() {
   });
 }
 
-function appendTypePanel(target, parts, refresh) {
+// Which Text style sections are open, so a rebuild keeps the person where they were.
+const openTypeParts = new Set();
+
+function sliderRow(label, value, { min, max, step, unit = '', empty = 'Theme' }, apply) {
+  const row = el('div', 'size-row');
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = String(min);
+  range.max = String(max);
+  range.step = String(step);
+  range.setAttribute('aria-label', label);
+  const number = document.createElement('input');
+  number.type = 'number';
+  number.min = String(min);
+  number.max = String(max);
+  number.step = String(step);
+  number.placeholder = empty;
+  number.setAttribute('aria-label', `${label} value`);
+  const has = value !== '' && value != null && Number.isFinite(Number(value));
+  number.value = has ? String(value) : '';
+  range.value = has ? String(value) : String(min + (max - min) / 2);
+  range.classList.toggle('unset', !has);
+  const set = (raw) => {
+    if (raw === '' || raw == null) {
+      number.value = '';
+      range.classList.add('unset');
+      apply('');
+      return;
+    }
+    const next = Math.min(max, Math.max(min, Number(raw)));
+    if (!Number.isFinite(next)) return;
+    range.value = String(next);
+    range.classList.remove('unset');
+    if (document.activeElement !== number) number.value = String(next);
+    apply(next);
+  };
+  range.addEventListener('input', () => {
+    number.value = range.value;
+    set(range.value);
+  });
+  number.addEventListener('input', () => set(number.value));
+  const reset = el('button', 'btn btn-quiet mini', 'Reset');
+  reset.type = 'button';
+  reset.addEventListener('click', () => set(''));
+  row.append(range, number);
+  if (unit) row.append(el('span', '', unit));
+  row.append(reset);
+  return field(label, row);
+}
+
+function appendTypePanel(target, parts, refresh, fits = true) {
   const box = el('div', 'type-panel');
   box.append(el('h2', 'side-title', 'Text style'));
-  box.append(el('p', 'hint', 'Leave a choice on Theme default to keep the look of this television. Auto fit shrinks the words to the box. Fixed size uses the percentage you set.'));
-  const fitRow = el('div', 'ground-row');
-  const fit = target.type?.fit === 'fixed' ? 'fixed' : 'auto';
-  [['auto', 'Auto fit'], ['fixed', 'Fixed size']].forEach(([value, label]) => {
-    const button = el('button', value === fit ? 'on' : '', label);
-    button.type = 'button';
-    button.addEventListener('click', () => {
-      setFit(target, value);
-      markDirty();
-      refresh();
-      buildInspector();
+  const change = (partId, patch) => {
+    setPart(target, partId, patch);
+    markDirty();
+    refresh();
+  };
+  if (fits) {
+    const fit = target.type?.fit === 'fixed' ? 'fixed' : 'auto';
+    box.append(el('p', 'hint', fit === 'fixed'
+      ? 'Exact size: 100% is the size that fills the box. Each Text size below is used as set, so 150% is half again as big, even if it runs past the box.'
+      : 'Fill the box: the words grow or shrink to fill the box. Text size sets how big each part is next to the others.'));
+    const fitRow = el('div', 'ground-row');
+    [['auto', 'Fill the box'], ['fixed', 'Exact size']].forEach(([value, label]) => {
+      const button = el('button', value === fit ? 'on' : '', label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        setFit(target, value);
+        markDirty();
+        refresh();
+        buildInspector();
+      });
+      fitRow.append(button);
     });
-    fitRow.append(button);
-  });
-  box.append(fitRow);
+    box.append(fitRow);
+  } else {
+    box.append(el('p', 'hint', 'These sizes follow the size of the box. Make the box bigger or smaller, or use Text size to adjust one part.'));
+  }
   parts.forEach((part) => {
     const details = document.createElement('details');
     details.className = 'type-part';
-    if (part.open) details.open = true;
+    const key = `${part.id}`;
+    details.open = openTypeParts.has(key) || (Boolean(part.open) && !openTypeParts.has(`closed:${key}`));
+    details.addEventListener('toggle', () => {
+      if (details.open) {
+        openTypeParts.add(key);
+        openTypeParts.delete(`closed:${key}`);
+      } else {
+        openTypeParts.delete(key);
+        openTypeParts.add(`closed:${key}`);
+      }
+    });
     const summary = document.createElement('summary');
     summary.textContent = part.label;
     details.append(summary);
@@ -1613,67 +1690,28 @@ function appendTypePanel(target, parts, refresh) {
       item.id !== 'theme' && full && !used.has(item.id),
     ]);
     details.append(field('Font', selectInput(canonicalFont(style.font) || 'theme', fonts, (value) => {
-      setPart(target, part.id, { font: value === 'theme' ? '' : value });
-      markDirty();
-      refresh();
+      change(part.id, { font: value === 'theme' ? '' : value });
       buildInspector();
     })));
     if (full) details.append(el('p', 'note', `This TV already uses ${MAX_EXTRA_FONTS} fonts beyond its theme. To keep the board clean, choose one of those, or put a piece back to Theme default.`));
-    const sizeRow = el('div', 'size-row');
-    const scale = Number(style.size) || 100;
-    const range = document.createElement('input');
-    range.type = 'range';
-    range.min = '60';
-    range.max = '180';
-    range.step = '5';
-    range.value = String(scale);
-    range.setAttribute('aria-label', `${part.label} size`);
-    const number = document.createElement('input');
-    number.type = 'number';
-    number.min = '60';
-    number.max = '180';
-    number.step = '5';
-    number.value = String(scale);
-    number.setAttribute('aria-label', `${part.label} size percent`);
-    const applySize = (value) => {
-      const next = Math.max(60, Math.min(180, Number(value) || 100));
-      range.value = String(next);
-      number.value = String(next);
-      setPart(target, part.id, { size: next });
-      markDirty();
-      refresh();
-    };
-    range.addEventListener('input', () => applySize(range.value));
-    number.addEventListener('input', () => applySize(number.value));
-    sizeRow.append(range, number, el('span', '', '%'));
-    details.append(field('Text size', sizeRow));
-    details.append(field('Weight', selectInput(String(style.weight || ''), [['', 'Theme default'], ['500', 'Medium'], ['650', 'Semibold'], ['800', 'Bold']], (value) => {
-      setPart(target, part.id, { weight: value });
-      markDirty();
-      refresh();
-    })));
-    details.append(checkInput(Boolean(style.italic), 'Italic', (value) => {
-      setPart(target, part.id, { italic: value });
-      markDirty();
-      refresh();
+    details.append(sliderRow('Text size', Number(style.size) || 100, { min: 40, max: 250, step: 5, unit: '%', empty: '100' }, (value) => {
+      change(part.id, { size: value === '' ? '' : value });
     }));
+    details.append(field('Weight', selectInput(String(style.weight || ''), [['', 'Theme default'], ['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['650', 'Semibold'], ['800', 'Bold']], (value) => {
+      change(part.id, { weight: value });
+    })));
+    details.append(checkInput(Boolean(style.italic), 'Italic', (value) => change(part.id, { italic: value })));
     const colorRow = el('div', 'color-row');
     const color = document.createElement('input');
     color.type = 'color';
     color.value = style.color || '#241c16';
     color.setAttribute('aria-label', `${part.label} color`);
-    color.addEventListener('input', () => {
-      setPart(target, part.id, { color: color.value });
-      markDirty();
-      refresh();
-    });
+    color.addEventListener('input', () => change(part.id, { color: color.value }));
     colorRow.append(color);
     const clear = el('button', 'btn', 'Theme color');
     clear.type = 'button';
     clear.addEventListener('click', () => {
-      setPart(target, part.id, { color: '' });
-      markDirty();
-      refresh();
+      change(part.id, { color: '' });
       buildInspector();
     });
     colorRow.append(clear);
@@ -1683,34 +1721,21 @@ function appendTypePanel(target, parts, refresh) {
       const button = el('button', (style.align || '') === value ? 'on' : '', label);
       button.type = 'button';
       button.addEventListener('click', () => {
-        setPart(target, part.id, { align: value });
-        markDirty();
-        refresh();
+        change(part.id, { align: value });
         buildInspector();
       });
       alignRow.append(button);
     });
     details.append(field('Alignment', alignRow));
-    details.append(field('Line spacing', numberInput(style.line || '', (value) => {
-      setPart(target, part.id, { line: value === '' ? '' : Number(value) });
-      refresh();
-    })));
-    details.append(field('Paragraph spacing', numberInput(style.para || '', (value) => {
-      setPart(target, part.id, { para: value === '' ? '' : Number(value) });
-      refresh();
-    })));
-    details.append(field('Letter spacing', numberInput(style.track || '', (value) => {
-      setPart(target, part.id, { track: value === '' ? '' : Number(value) });
-      refresh();
-    })));
-    details.append(field('Case', selectInput(style.case || '', [['', 'Normal'], ['upper', 'Uppercase']], (value) => {
-      setPart(target, part.id, { case: value });
-      markDirty();
-      refresh();
-    })));
+    details.append(sliderRow('Line spacing', style.line, { min: 0.8, max: 2.5, step: 0.05, unit: 'x' }, (value) => change(part.id, { line: value })));
+    if (part.para) {
+      details.append(sliderRow('Space between paragraphs', style.para, { min: 0, max: 2, step: 0.05, unit: 'em' }, (value) => change(part.id, { para: value })));
+    }
+    details.append(sliderRow('Letter spacing', style.track, { min: -0.05, max: 0.4, step: 0.01, unit: 'em' }, (value) => change(part.id, { track: value })));
+    details.append(field('Case', selectInput(style.case || '', [['', 'Normal'], ['upper', 'Uppercase']], (value) => change(part.id, { case: value }))));
     box.append(details);
   });
-  const reset = el('button', 'btn', 'Reset to theme');
+  const reset = el('button', 'btn', 'Reset all text to the theme');
   reset.type = 'button';
   reset.addEventListener('click', () => {
     delete target.type;
@@ -1772,7 +1797,7 @@ function buildTakeoverForm() {
   });
   inspector.append(preview);
   inspector.append(el('p', 'note', 'Preview stays on this page. The TV changes only after you turn the message on and press Save.'));
-  appendTypePanel(takeover, TYPE_PARTS.takeover, () => { if (previewTakeover) renderCanvas(); });
+  appendTypePanel(takeover, TYPE_PARTS.takeover, () => { if (previewTakeover) renderCanvas(); }, true);
 }
 
 function reorder(id, direction) {
