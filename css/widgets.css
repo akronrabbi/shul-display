@@ -575,3 +575,6 @@
   .welcome-track { animation: none; }
   .photos .photo { transition: none; }
 }
+
+/* While measuring the size that fills a box, every part counts as 100%. */
+.fit-measure, .fit-measure * { --t-scale: 1 !important; }

@@ -228,13 +228,31 @@ function fitBox(el, box, options = {}) {
   el.style.fontSize = `${Math.floor(best)}px`;
 }
 
-function watchFit(el, box, bag, options) {
-  const run = () => fitBox(el, box, options);
+// Sizes text in a box. Auto fit fills the box, and each part's Text size sets
+// how big it is next to the others. Exact size makes 100% the size that fills
+// the box with every part at 100%, then applies each part's size as set, so
+// 150% really is half again as big (and may run past the box).
+export function sizeText(el, box, type) {
+  if (!el || !box) return;
+  const exact = fixedSize(type);
+  if (exact) el.classList.add('fit-measure');
+  fitBox(el, box, sizeText.options.get(el) || {});
+  if (exact) el.classList.remove('fit-measure');
+  const own = Number(el.style.getPropertyValue('--t-scale')) || 1;
+  const factor = exact ? own : Math.min(own, 1);
+  if (factor !== 1) el.style.fontSize = `${Math.max(8, Math.floor(parseFloat(el.style.fontSize) * factor))}px`;
+}
+sizeText.options = new WeakMap();
+
+function watchSize(el, box, bag, options, type) {
+  sizeText.options.set(el, options || {});
+  const run = () => sizeText(el, box, type);
   requestAnimationFrame(() => requestAnimationFrame(run));
   const observer = new ResizeObserver(run);
   observer.observe(box);
   bag.push(() => observer.disconnect());
 }
+
 
 async function resolveUrl(ctx, assetId, url) {
   if (assetId) {
@@ -368,10 +386,10 @@ function mountWelcome(body, widget) {
     const line = h('div', 'welcome-line', text);
     line.dir = 'auto';
     stylePart(line, settings.type, 'line');
-    if (fixedSize(settings.type)) line.style.whiteSpace = 'pre-line';
+
     box.append(line);
     root.append(box);
-    if (!fixedSize(settings.type)) watchFit(line, box, bag, { line: true });
+    watchSize(line, box, bag, { line: true }, settings.type);
   }
   body.append(root);
   return () => bag.forEach((fn) => fn());
@@ -667,11 +685,12 @@ function mountEvents(body, widget, ctx) {
         list.append(row);
       }
     }
-    if (!fixedSize(settings.type)) fitBox(list, grow, { max: 76 });
+    sizeText.options.set(list, { max: 76 });
+    sizeText(list, grow, settings.type);
   };
 
   paint();
-  if (!fixedSize(settings.type)) watchFit(list, grow, bag, { max: 76 });
+  watchSize(list, grow, bag, { max: 76 }, settings.type);
   every(30000, paint, bag);
   return () => bag.forEach((fn) => fn());
 }
@@ -705,7 +724,7 @@ function mountText(body, widget) {
   grow.append(block);
   root.append(grow);
   body.append(root);
-  if (!fixedSize(settings.type)) watchFit(block, grow, bag, { max: 68 });
+  watchSize(block, grow, bag, { max: 68 }, settings.type);
   return () => bag.forEach((fn) => fn());
 }
 
@@ -735,10 +754,11 @@ function mountZmanim(body, widget, ctx) {
     }
     grow.append(list);
     root.append(grow);
-    if (!fixedSize(settings.type)) fitBox(list, grow, { max: 40 });
+    sizeText.options.set(list, { max: 40 });
+    sizeText(list, grow, settings.type);
   };
   paint();
-  const observer = new ResizeObserver(() => { if (!fixedSize(settings.type)) paint(); });
+  const observer = new ResizeObserver(() => paint());
   observer.observe(body);
   bag.push(() => observer.disconnect());
   every(30000, paint, bag);
@@ -829,7 +849,7 @@ export async function renderTakeover(host, takeover, ctx) {
   root.append(scrim, copy);
   host.append(root);
   const bag = [];
-  if (!fixedSize(takeover.type)) watchFit(title, titleBox, bag);
+  watchSize(title, titleBox, bag, {}, takeover.type);
   return () => {
     bag.forEach((fn) => fn());
     host.replaceChildren();
