@@ -1124,3 +1124,19 @@ body.is-dragging .screen-canvas::after { opacity: 1; }
   .name-form input { min-height: 44px; font-size: 16px; }
   .name-form .btn { min-height: 44px; }
 }
+
+.use-panel {
+  margin: 8px 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--ui-sunk);
+  border: 1px solid var(--ui-line);
+}
+.use-panel .tool-row { margin: 4px 0 6px; }
+.use-panel select {
+  width: 100%;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--ui-panel);
+}
