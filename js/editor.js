@@ -1040,6 +1040,39 @@ function actionButton(label, onClick) {
   return button;
 }
 
+// Some browsers (often inside apps, or on phones) silently block pop-up
+// confirm and prompt boxes. Ask with a second tap on the same button instead.
+function tapTwice(label, confirmLabel, onConfirm) {
+  const button = el('button', 'btn', label);
+  button.type = 'button';
+  let armed = false;
+  let timer = 0;
+  const reset = () => {
+    armed = false;
+    button.textContent = label;
+    button.classList.remove('confirming');
+  };
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true;
+      button.textContent = confirmLabel;
+      button.classList.add('confirming');
+      clearTimeout(timer);
+      timer = setTimeout(reset, 5000);
+      return;
+    }
+    clearTimeout(timer);
+    reset();
+    button.disabled = true;
+    try {
+      await onConfirm();
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return button;
+}
+
 function fileButton(label, accept, onFile) {
   const wrap = el('label', 'btn');
   wrap.textContent = label;
@@ -1150,8 +1183,7 @@ function buildPhotosForm(settings) {
   });
   inspector.append(list);
   if (settings.images.length > 1) {
-    inspector.append(actionButton(`Remove all ${settings.images.length} photos`, () => {
-      if (!window.confirm('Remove every photo from this slideshow? The Drive folder, if any, stays.')) return;
+    inspector.append(tapTwice(`Remove all ${settings.images.length} photos`, 'Tap again to remove them all', () => {
       settings.images.splice(0, settings.images.length);
       markDirty();
       refreshWidget(selectedId);
@@ -1250,6 +1282,8 @@ function buildPhotosForm(settings) {
   inspector.append(field('Fit', selectInput(settings.fit, [['cover', 'Fill the box'], ['contain', 'Show the whole photo']], (value) => { settings.fit = value; })));
 }
 
+let editingClientId = false;
+
 function googleSettings() {
   if (!state.google) state.google = { photosClientId: '' };
   return state.google;
@@ -1261,13 +1295,15 @@ function buildGooglePhotos(settings) {
   box.append(el('p', 'note', 'Pick pictures from Google Photos, including a whole album: open the album in the Google window and select its pictures. They are copied into this board, so the TV keeps showing them. To add new ones later, pick again.'));
   const message = el('p', 'note gphotos-status', '');
   const google = googleSettings();
-  if (!google.photosClientId) {
+  if (!google.photosClientId || editingClientId) {
     const id = document.createElement('input');
     id.type = 'text';
+    id.value = google.photosClientId || '';
     id.placeholder = '1234-abc.apps.googleusercontent.com';
     id.spellcheck = false;
     id.autocomplete = 'off';
     const keep = actionButton('Use this client ID', () => {
+      editingClientId = false;
       google.photosClientId = id.value.trim();
       markDirty();
       buildInspector();
@@ -1317,10 +1353,7 @@ function buildGooglePhotos(settings) {
     });
     box.append(run);
     const change = actionButton('Change client ID', () => {
-      const next = window.prompt('Google client ID', google.photosClientId);
-      if (next == null) return;
-      google.photosClientId = next.trim();
-      markDirty();
+      editingClientId = true;
       buildInspector();
     });
     change.classList.add('btn-quiet');
@@ -1516,14 +1549,16 @@ function buildTemplatesForm() {
     card.append(el('strong', '', template.label));
     card.append(el('p', 'note', template.blurb));
     const row = el('div', 'tool-row');
-    row.append(actionButton('Use on this screen', () => {
-      if (screen().widgets.length && !window.confirm(`Replace the pieces on "${screen().name || 'this screen'}" with the ${template.label} layout? Undo can bring them back.`)) return;
+    const use = () => {
       screen().widgets = applyTemplate(template, screen().widgets, defaultSettings, () => uid('w'));
       selectedId = null;
       markDirty();
       renderCanvas();
       setStatus(`Applied ${template.label}. Change anything you like, then Save.`, 'dirty');
-    }));
+    };
+    row.append(screen().widgets.length
+      ? tapTwice('Use on this screen', 'Tap again to replace this screen', use)
+      : actionButton('Use on this screen', use));
     row.append(actionButton('As a new screen', () => {
       const created = {
         id: uid('s'),
@@ -1797,7 +1832,18 @@ function deleteTv() {
   if (state.tvs.length < 2) return;
   const current = tv();
   const label = `TV ${state.activeTv + 1} - ${current.name || 'Untitled'}`;
-  if (!confirm(`Remove ${label}? Its address will stop working.`)) return;
+  const button = document.getElementById('delete-tv');
+  if (button.dataset.armed !== '1') {
+    button.dataset.armed = '1';
+    button.textContent = `Tap again to remove ${label}`;
+    setTimeout(() => {
+      delete button.dataset.armed;
+      button.textContent = 'Remove this TV';
+    }, 5000);
+    return;
+  }
+  delete button.dataset.armed;
+  button.textContent = 'Remove this TV';
   state.tvs.splice(state.activeTv, 1);
   state.activeTv = Math.max(0, state.activeTv - 1);
   selectedId = null;
@@ -2171,6 +2217,10 @@ function bindChrome() {
   document.getElementById('undo').addEventListener('click', undo);
   document.getElementById('redo').addEventListener('click', redo);
   document.getElementById('layouts').addEventListener('click', () => openArchive('layouts'));
+  document.getElementById('save-as-layout').addEventListener('click', () => {
+    pendingLayoutFocus = true;
+    openArchive('layouts');
+  });
   document.getElementById('history').addEventListener('click', () => openArchive('history'));
   document.getElementById('reload-published').addEventListener('click', async () => {
     const published = await storage.loadPublished();
@@ -2385,7 +2435,7 @@ async function keepOnline(next) {
   state = normalize(next);
   const result = await storage.saveOnline(state);
   if (!result.ok) {
-    status.textContent = archiveNote(result, 'Could not save online.');
+    setStatus(archiveNote(result, 'Could not save online.'), 'error');
     return false;
   }
   savedJson = JSON.stringify(state);
@@ -2406,110 +2456,174 @@ function openArchive(kind) {
   buildInspector();
 }
 
+function nameForm(placeholder, value, buttonLabel, onSubmit) {
+  const form = el('form', 'name-form');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.maxLength = 80;
+  input.placeholder = placeholder;
+  input.value = value || '';
+  input.setAttribute('aria-label', placeholder);
+  const go = el('button', 'btn btn-primary', buttonLabel);
+  go.type = 'submit';
+  form.append(input, go);
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+    go.disabled = true;
+    try {
+      await onSubmit(name);
+    } finally {
+      go.disabled = false;
+    }
+  });
+  return { form, input };
+}
+
+function panelMessage(host) {
+  const line = el('p', 'panel-message', '');
+  host.append(line);
+  return (text, kind = '') => {
+    line.textContent = text;
+    line.dataset.kind = kind;
+  };
+}
+
 async function buildLayouts() {
   inspector.replaceChildren(el('h2', 'side-title', 'Saved layouts'));
   syncSheet();
-  inspector.append(el('p', 'hint', 'Keep a copy you can come back to. History also keeps the last 30 online saves.'));
-  const saveAs = el('button', 'btn btn-primary', 'Save as layout...');
-  saveAs.type = 'button';
-  saveAs.addEventListener('click', async () => {
-    const name = window.prompt('Name this layout', 'Regular week');
-    if (!name || !name.trim()) return;
+  inspector.append(el('p', 'hint', 'Save (top right) updates the TVs. A saved layout is a named copy of every TV that you can come back to, such as Regular week or Shabbos. History keeps the last 30 boards that a Save replaced.'));
+  const { form, input } = nameForm('Layout name, e.g. Shabbos', '', 'Save as layout', async (name) => {
+    say('Saving the layout...', 'busy');
     const result = await storage.writeLayout({
-      id: crypto.randomUUID(),
-      name: name.trim().slice(0, 80),
-      config: state,
+      id: layoutId(),
+      name: name.slice(0, 80),
+      config: normalize(state),
       locked: false,
     });
-    status.textContent = result.ok ? `Saved the layout "${name.trim()}".` : archiveNote(result, 'Could not save that layout.');
-    if (result.ok) buildLayouts();
+    if (result.ok) {
+      setStatus(`Saved the layout "${name}".`, 'saved');
+      buildLayouts();
+    } else {
+      say(archiveNote(result, 'Could not save that layout.'), 'error');
+    }
   });
-  inspector.append(saveAs);
+  inspector.append(form);
+  const say = panelMessage(inspector);
+  if (pendingLayoutFocus) {
+    pendingLayoutFocus = false;
+    setTimeout(() => input.focus(), 50);
+  }
+  inspector.append(el('h3', 'week-title', 'Your layouts'));
   const listed = await storage.listLayouts();
+  if (mode !== 'layouts') return;
   if (!listed.ok) {
-    inspector.append(el('p', 'note', archiveNote(listed, 'Could not load layouts.')));
+    say(archiveNote(listed, 'Could not load layouts.'), 'error');
     syncSheet();
     return;
   }
-  if (!listed.rows.length) inspector.append(el('p', 'note', 'No saved layouts yet.'));
+  if (!listed.rows.length) inspector.append(el('p', 'note', 'No saved layouts yet. Type a name above and press Save as layout.'));
   listed.rows.forEach((row) => {
     const card = el('div', 'archive-card');
     card.append(el('strong', '', row.name));
     card.append(el('p', 'note', `${stamp(row.updated_at)}${row.updated_by ? `  -  ${row.updated_by}` : ''}${row.locked ? '  -  Locked' : ''}`));
+    const rowSay = panelMessage(card);
+    const open = async () => {
+      const full = await storage.readLayout(row.id);
+      if (!full.ok || !full.rows[0]) {
+        rowSay(archiveNote(full, 'Could not open that layout.'), 'error');
+        return null;
+      }
+      return full.rows[0].config;
+    };
     const rowActions = el('div', 'row-actions');
-    rowActions.append(actionButton('Every TV', async () => {
-      if (!window.confirm(`Replace every TV with "${row.name}"? The current board is kept in History.`)) return;
-      const full = await storage.readLayout(row.id);
-      if (!full.ok || !full.rows[0]) {
-        status.textContent = archiveNote(full, 'Could not open that layout.');
-        return;
-      }
-      if (await keepOnline(full.rows[0].config)) status.textContent = `Restored "${row.name}".`;
+    rowActions.append(tapTwice('Put on every TV', 'Tap again: replace every TV', async () => {
+      const config = await open();
+      if (config && await keepOnline(config)) setStatus(`"${row.name}" is now on every TV. The board it replaced is in History.`, 'saved');
     }));
-    rowActions.append(actionButton('This TV only', async () => {
-      if (!window.confirm(`Replace only this TV with the one from "${row.name}"? The other TVs stay as they are. The current board is kept in History.`)) return;
-      const full = await storage.readLayout(row.id);
-      if (!full.ok || !full.rows[0]) {
-        status.textContent = archiveNote(full, 'Could not open that layout.');
-        return;
-      }
-      const next = structuredClone(state);
-      state = next;
-      replaceActiveTv(full.rows[0].config);
-      if (await keepOnline(state)) status.textContent = `Restored this TV from "${row.name}".`;
-    }));
-    rowActions.append(actionButton('Rename', async () => {
+    if (state.tvs.length > 1) {
+      rowActions.append(tapTwice('This TV only', `Tap again: replace ${tv().name || 'this TV'}`, async () => {
+        const config = await open();
+        if (!config) return;
+        state = structuredClone(state);
+        replaceActiveTv(config);
+        if (await keepOnline(state)) setStatus(`Put "${row.name}" on ${tv().name || 'this TV'}. The other TVs stayed as they were.`, 'saved');
+      }));
+    }
+    rowActions.append(actionButton('Rename', () => {
       if (row.locked) {
-        status.textContent = 'That layout is locked. Unlock it first.';
+        rowSay('That layout is locked. Unlock it first.', 'error');
         return;
       }
-      const name = window.prompt('New name', row.name);
-      if (!name || !name.trim()) return;
-      const result = await storage.patchLayout(row.id, { name: name.trim().slice(0, 80) });
-      status.textContent = result.ok ? 'Renamed.' : archiveNote(result, 'Could not rename that layout.');
-      if (result.ok) buildLayouts();
+      const rename = nameForm('New name', row.name, 'Rename', async (name) => {
+        const result = await storage.patchLayout(row.id, { name: name.slice(0, 80) });
+        if (result.ok) buildLayouts();
+        else rowSay(archiveNote(result, 'Could not rename that layout.'), 'error');
+      });
+      rowActions.replaceWith(rename.form);
+      rename.input.focus();
+      rename.input.select();
     }));
     rowActions.append(actionButton(row.locked ? 'Unlock' : 'Lock', async () => {
       const result = await storage.patchLayout(row.id, { locked: !row.locked });
-      status.textContent = result.ok ? (row.locked ? 'Unlocked.' : 'Locked.') : archiveNote(result, 'Could not change the lock.');
       if (result.ok) buildLayouts();
+      else rowSay(archiveNote(result, 'Could not change the lock.'), 'error');
     }));
-    rowActions.append(actionButton('Delete', async () => {
-      if (row.locked) {
-        status.textContent = 'That layout is locked. Unlock it first.';
-        return;
-      }
-      if (!window.confirm(`Delete the layout "${row.name}"? This cannot be undone.`)) return;
-      const result = await storage.removeLayout(row.id);
-      status.textContent = result.ok ? 'Deleted.' : archiveNote(result, 'Could not delete that layout.');
-      if (result.ok) buildLayouts();
-    }));
+    if (!row.locked) {
+      const remove = tapTwice('Delete', 'Tap again to delete it', async () => {
+        const result = await storage.removeLayout(row.id);
+        if (result.ok) buildLayouts();
+        else rowSay(archiveNote(result, 'Could not delete that layout.'), 'error');
+      });
+      remove.classList.add('btn-danger');
+      rowActions.append(remove);
+    }
     card.append(rowActions);
     inspector.append(card);
   });
   syncSheet();
 }
 
+let pendingLayoutFocus = false;
+
+function layoutId() {
+  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  return `layout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 async function buildHistory() {
   inspector.replaceChildren(el('h2', 'side-title', 'History'));
   syncSheet();
-  inspector.append(el('p', 'hint', 'Each online save keeps the previous board. The last 30 are here. Restoring keeps today in this list, so you can undo it.'));
+  inspector.append(el('p', 'hint', 'Each Save keeps the board it replaced. The last 30 are here. Restoring keeps the current board in this list, so you can undo it.'));
+  const say = panelMessage(inspector);
+  const now = el('div', 'archive-card current');
+  let savedAt = '';
+  try { savedAt = localStorage.getItem('shul-display-updated-at') || ''; } catch { savedAt = ''; }
+  now.append(el('strong', '', 'On the TVs now'));
+  now.append(el('p', 'note', `${savedAt ? `Saved ${stamp(savedAt)}. ` : ''}${dirty() ? 'You have changes that are not saved yet.' : 'This is what the editor shows.'}`));
+  inspector.append(now);
   const listed = await storage.listHistory();
+  if (mode !== 'history') return;
   if (!listed.ok) {
-    inspector.append(el('p', 'note', archiveNote(listed, 'Could not load history.')));
+    say(archiveNote(listed, 'Could not load history.'), 'error');
     syncSheet();
     return;
   }
-  if (!listed.rows.length) inspector.append(el('p', 'note', 'No earlier saves yet. Press Save once more and the previous board will show up here.'));
+  if (!listed.rows.length) inspector.append(el('p', 'note', 'No earlier boards yet. The next time you Save, the board it replaces will show up here.'));
   listed.rows.forEach((row) => {
     const card = el('div', 'archive-card');
     card.append(el('strong', '', stamp(row.saved_at) || 'Saved'));
-    card.append(el('p', 'note', row.saved_by || 'Editor'));
+    card.append(el('p', 'note', `Replaced by a save${row.saved_by ? ` from ${row.saved_by}` : ''}`));
+    const rowSay = panelMessage(card);
     const rowActions = el('div', 'row-actions');
     rowActions.append(actionButton('Preview', async () => {
       const full = await storage.readHistory(row.id);
       if (!full.ok || !full.rows[0]) {
-        status.textContent = archiveNote(full, 'Could not open that version.');
+        rowSay(archiveNote(full, 'Could not open that version.'), 'error');
         return;
       }
       clearTimeout(undoTimer);
@@ -2517,16 +2631,15 @@ async function buildHistory() {
       state = normalize(full.rows[0].config);
       paintChrome();
       renderCanvas();
-      status.textContent = 'Previewing a past version. Press History, then Restore, to keep it. Undo goes back.';
+      setStatus('Previewing a past version. Restore keeps it. Undo goes back.', 'dirty');
     }));
-    rowActions.append(actionButton('Restore', async () => {
-      if (!window.confirm('Put this past version back on every TV? Today\'s board is kept in History so you can return.')) return;
+    rowActions.append(tapTwice('Restore', 'Tap again to put it on every TV', async () => {
       const full = await storage.readHistory(row.id);
       if (!full.ok || !full.rows[0]) {
-        status.textContent = archiveNote(full, 'Could not open that version.');
+        rowSay(archiveNote(full, 'Could not open that version.'), 'error');
         return;
       }
-      if (await keepOnline(full.rows[0].config)) status.textContent = 'Restored that version.';
+      if (await keepOnline(full.rows[0].config)) setStatus('Restored that version on every TV.', 'saved');
     }));
     card.append(rowActions);
     inspector.append(card);
