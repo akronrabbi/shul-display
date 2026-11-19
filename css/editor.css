@@ -427,6 +427,29 @@ button:disabled, .btn:disabled { opacity: 0.45; cursor: default; }
 
 .tab:hover { color: var(--ui-ink); }
 .tab.on { background: var(--ui-ink); color: #ffffff; border-color: var(--ui-ink); }
+.tab .live-dot {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--ui-good);
+  vertical-align: 1px;
+}
+.tab .live-dot.shabbos { background: #8a6a2c; }
+.live-box {
+  margin: 0 0 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--ui-line);
+  background: var(--ui-sunk);
+}
+.live-box.is-live { border-color: #b7dcc6; background: var(--ui-good-soft); color: var(--ui-good); }
+.live-box .btn { margin-top: 6px; }
 
 .board-bar .choice { margin: 0; align-items: center; }
 

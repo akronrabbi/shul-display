@@ -77,8 +77,7 @@ function pickScreen(now) {
   let pool = screens.map((screen, index) => ({ screen, index }));
   if (restScreen && pool.length > 1) pool = pool.filter((item) => item.screen !== restScreen);
   if (pool.length < 2 || !current.cycleScreens) {
-    const wanted = Math.max(0, current?.activeScreen || 0);
-    const pick = pool.find((item) => item.index === wanted) || pool[0];
+    const pick = pool.find((item) => item.screen.id === current.liveScreen) || pool[0];
     return pick ? { ...pick, rest: false } : { screen: { widgets: [] }, index: 0, rest: false };
   }
   const durations = pool.map((item) => Math.max(5, Number(item.screen.duration) || 20));
