@@ -4,34 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Edit the lobby display - Anshe Sfard</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Frank+Ruhl+Libre:wght@500;700&family=Libre+Baskerville:wght@400;700&family=Manrope:wght@500;600;700&family=Noto+Sans+Hebrew:wght@500;600;700&family=Noto+Serif+Hebrew:wght@500;600;700&family=Nunito:wght@500;600;700&family=Outfit:wght@500;600;700&family=Rubik:wght@500;600;700&family=Assistant:wght@500;600;700&family=Heebo:wght@500;600;700&family=Literata:opsz,wght@7..72,500;7..72,700&family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Spectral:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./vendor/fonts/fonts.css">
   <link rel="stylesheet" href="./css/theme.css">
   <link rel="stylesheet" href="./css/widgets.css">
   <link rel="stylesheet" href="./css/editor.css">
-  <style>html,body{background:#e7dccb}</style>
+  <style>html,body{background:#f4f4f2}</style>
 </head>
 <body>
   <header class="top">
-    <div>
-      <h1 class="brand-name">Anshe Sfard</h1>
-      <p class="brand-sub">Lobby display for Rabbi Moshe Sasonkin</p>
+    <div class="brand">
+      <img class="brand-mark" src="./assets/akron-shul-logo.png" alt="">
+      <div>
+        <h1 class="brand-name">Anshe Sfard</h1>
+        <p class="brand-sub">Lobby display</p>
+      </div>
     </div>
     <div class="top-end">
-      <div class="top-actions" id="top-actions">
-        <button type="button" class="btn" id="reload-published">Load published layout</button>
-        <button type="button" class="btn" id="import">Import</button>
-        <button type="button" class="btn" id="export">Export</button>
-        <button type="button" class="btn" id="undo">Undo</button>
-        <button type="button" class="btn" id="redo">Redo</button>
-        <button type="button" class="btn" id="layouts">Saved layouts</button>
-        <button type="button" class="btn" id="history">History</button>
-        <button type="button" class="btn" id="open-tv">Open the TV</button>
-        <input id="import-file" type="file" accept="application/json,.json" hidden>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <div class="icon-group" role="group" aria-label="Undo and redo">
+        <button type="button" class="btn icon" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo">&#8630;</button>
+        <button type="button" class="btn icon" id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">&#8631;</button>
       </div>
-      <button type="button" class="btn btn-primary" id="save">Save</button>
-      <button type="button" class="btn menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="top-actions">Menu</button>
+      <button type="button" class="btn" id="week">This week</button>
+      <button type="button" class="btn" id="templates">Ready layouts</button>
+      <div class="more-wrap">
+        <button type="button" class="btn menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="top-actions">More</button>
+        <div class="top-actions" id="top-actions">
+          <button type="button" class="btn" id="open-tv">Open the TV</button>
+          <button type="button" class="btn" id="layouts">Saved layouts</button>
+          <button type="button" class="btn" id="history">History</button>
+          <button type="button" class="btn" id="import">Import a file</button>
+          <button type="button" class="btn" id="export">Export a file</button>
+          <button type="button" class="btn" id="reload-published">Load published layout</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary" id="save" title="Save (Ctrl+S)">Save</button>
     </div>
   </header>
   <section class="signin" id="signin">
@@ -64,6 +72,7 @@
   <div class="tv-bar">
     <select id="tv-select" class="tv-select" aria-label="Which TV"></select>
     <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
+    <span class="tv-status" id="tv-status" hidden></span>
     <label class="tv-name-label">Name <input id="tv-name" type="text" maxlength="40" aria-label="TV name"></label>
     <label class="rotate-control">Rotate design to fit screen
       <select id="tv-rotate" aria-label="Rotate design to fit screen">
@@ -91,8 +100,7 @@
         </div>
         <div class="tabs" id="tabs"></div>
         <label class="choice"><input type="checkbox" id="cycle"> Cycle through screens</label>
-        <button type="button" class="btn mobile-only" id="screen-settings">Screen settings</button>
-        <div class="status" id="status"></div>
+        <button type="button" class="btn" id="screen-settings">Screen settings</button>
       </div>
       <div class="board-frame" id="board-frame">
         <div class="screen-canvas" id="canvas"></div>

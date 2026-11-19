@@ -123,6 +123,8 @@ export function defaultSettings(type) {
         images: [],
         interval: 8,
         crossfade: true,
+        transition: 'fade',
+        order: 'in-order',
         fit: 'cover',
         driveFolder: '',
         driveApiKey: '',
@@ -400,6 +402,45 @@ async function collectPhotoUrls(settings, ctx) {
   return { urls, driveError };
 }
 
+export const PHOTO_TRANSITIONS = [
+  ['fade', 'Soft fade'],
+  ['zoom', 'Fade with a slow zoom'],
+  ['slide', 'Slide across'],
+  ['none', 'Cut, no movement'],
+];
+
+export function photoTransition(settings) {
+  const value = settings?.transition;
+  if (PHOTO_TRANSITIONS.some(([id]) => id === value)) return value;
+  return settings?.crossfade === false ? 'none' : 'fade';
+}
+
+function preload(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.referrerPolicy = 'no-referrer';
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      resolve(ok);
+    };
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    setTimeout(() => finish(true), 10000);
+    img.src = url;
+  });
+}
+
+function shuffled(list) {
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 async function mountPhotos(body, widget, ctx) {
   const bag = [];
   const settings = widget.settings;
@@ -407,14 +448,18 @@ async function mountPhotos(body, widget, ctx) {
   const root = h('div', 'photos');
   const note = h('div', 'empty-note', 'Looking for photos...');
   const fit = settings.fit === 'contain' ? 'contain' : 'cover';
+  const transition = photoTransition(settings);
+  const seconds = Math.max(2, Number(settings.interval) || 8);
+  root.dataset.transition = transition;
+  root.style.setProperty('--slide-time', `${seconds + 2}s`);
   const a = h('img', 'photo');
   const b = h('img', 'photo');
-  a.alt = '';
-  b.alt = '';
-  a.referrerPolicy = 'no-referrer';
-  b.referrerPolicy = 'no-referrer';
-  a.style.objectFit = fit;
-  b.style.objectFit = fit;
+  for (const img of [a, b]) {
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    img.style.objectFit = fit;
+  }
   root.append(a, b, note);
   if (settings.caption) root.append(piece('caption', settings.caption, settings.type, 'small'));
   body.append(root);
@@ -422,25 +467,45 @@ async function mountPhotos(body, widget, ctx) {
   let index = 0;
   let front = a;
   let slideTimer = 0;
-  const fade = settings.crossfade !== false;
-  const step = () => {
-    if (urls.length < 2) return;
-    index = (index + 1) % urls.length;
-    const next = front === a ? b : a;
-    next.src = urls[index];
-    if (fade) {
-      next.classList.add('on');
-      front.classList.remove('on');
-    } else {
-      a.classList.toggle('on', next === a);
-      b.classList.toggle('on', next === b);
+  let busy = false;
+  let alive = true;
+  bag.push(() => { alive = false; });
+
+  const enter = (next, previous) => {
+    next.classList.add('instant');
+    next.classList.remove('on', 'leaving');
+    void next.offsetWidth;
+    next.classList.remove('instant');
+    next.classList.add('on');
+    if (previous && previous !== next) {
+      previous.classList.remove('on');
+      previous.classList.add('leaving');
     }
-    front = next;
+  };
+
+  const step = async () => {
+    if (busy || urls.length < 2) return;
+    busy = true;
+    try {
+      for (let tries = 0; tries < urls.length; tries += 1) {
+        index = (index + 1) % urls.length;
+        // Wait for the next picture to arrive, so a fade never shows an empty box.
+        if (await preload(urls[index])) break;
+      }
+      if (!alive) return;
+      const next = front === a ? b : a;
+      next.src = urls[index];
+      try { await next.decode(); } catch { /* show it anyway */ }
+      if (!alive) return;
+      enter(next, front);
+      front = next;
+    } finally {
+      busy = false;
+    }
   };
   const ensureSlides = () => {
     if (slideTimer || urls.length < 2) return;
-    const ms = Math.max(2, Number(settings.interval) || 8) * 1000;
-    slideTimer = setInterval(step, ms);
+    slideTimer = setInterval(step, seconds * 1000);
     bag.push(() => clearInterval(slideTimer));
   };
   const show = () => {
@@ -448,7 +513,7 @@ async function mountPhotos(body, widget, ctx) {
     if (!urls.length) return;
     if (!a.getAttribute('src')) {
       a.src = urls[0];
-      a.classList.add('on');
+      enter(a, null);
       front = a;
       index = 0;
     } else if (index >= urls.length) {
@@ -458,7 +523,8 @@ async function mountPhotos(body, widget, ctx) {
   };
   const reload = async () => {
     const found = await collectPhotoUrls(settings, ctx);
-    urls.splice(0, urls.length, ...found.urls);
+    const list = settings.order === 'shuffle' ? shuffled(found.urls) : found.urls;
+    urls.splice(0, urls.length, ...list);
     if (!urls.length) {
       note.hidden = false;
       if (found.driveError) note.textContent = explainDriveError(found.driveError);
@@ -477,8 +543,9 @@ async function mountPhotos(body, widget, ctx) {
 let pdfjsPromise;
 function loadPdfjs() {
   if (!pdfjsPromise) {
-    pdfjsPromise = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs').then((pdfjs) => {
-      pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+    // PDF.js is stored with the site, so a flyer opens even when the network is down.
+    pdfjsPromise = import(new URL('../vendor/pdfjs/pdf.min.mjs', import.meta.url).href).then((pdfjs) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdfjs/pdf.worker.min.mjs', import.meta.url).href;
       return pdfjs;
     });
   }
@@ -549,8 +616,12 @@ async function mountPdf(body, widget, ctx) {
   if (pdf.numPages > 1) {
     const ms = Math.max(3, Number(settings.interval) || 12) * 1000;
     every(ms, () => {
-      pageNum = pageNum % pdf.numPages + 1;
-      draw();
+      canvas.classList.add('turning');
+      setTimeout(async () => {
+        pageNum = pageNum % pdf.numPages + 1;
+        await draw();
+        canvas.classList.remove('turning');
+      }, 450);
     }, bag);
   }
   bag.push(() => pdf.destroy());
@@ -585,7 +656,8 @@ function mountEvents(body, widget, ctx) {
         const title = piece('event-title', event.title, settings.type, 'title');
         title.dir = 'auto';
         what.append(title);
-        const metaBits = [formatClockNumbers(event.time), event.location, event.note].filter(Boolean);
+        const repeatLabel = event.repeat === 'weekly' ? `Every ${parts.dowLong}` : (event.repeat === 'biweekly' ? `Every other ${parts.dowLong}` : '');
+        const metaBits = [formatClockNumbers(event.time), repeatLabel, event.location, event.note].filter(Boolean);
         if (metaBits.length) {
           const meta = piece('event-meta', metaBits.join('  -  '), settings.type, 'small');
           meta.dir = 'auto';

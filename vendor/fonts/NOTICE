@@ -1,0 +1,4 @@
+These fonts are stored with the site so the television does not depend on Google Fonts.
+They come from Fontsource (https://fontsource.org) and are licensed under the SIL Open Font
+License 1.1. Each family's license is in the licenses folder. Only the Latin, Latin Extended,
+and Hebrew subsets are kept. fonts.css was generated from the Fontsource stylesheets.

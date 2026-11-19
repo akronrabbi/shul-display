@@ -9,7 +9,9 @@
   <script src="../vendor/hebcal/hebcal-core.min.js"></script>
   <script type="module">
     import { createCalendar, akronWallTimeToDate } from '../js/calendar.js';
-    import { isCurrentEvent } from '../js/events.js';
+    import { isCurrentEvent, inDateRange, nextOccurrence, upcomingEvents } from '../js/events.js';
+    import { TEMPLATES } from '../js/templates.js';
+    import { canonicalFont, extraFontsUsed } from '../js/type.js';
     import { classifyImageLine } from '../js/images.js';
     import { normalizeConfig, pickTv } from '../js/model.js';
     import { parseDriveFolderId, explainDriveError } from '../js/drive.js';
@@ -77,6 +79,44 @@
     check('tv number', pickTv(pair, '2').id === 'social-hall');
     check('tv slug', pickTv(pair, 'social-hall').id === 'social-hall');
     check('no double wrap', normalizeConfig(migrated).tvs.length === 1);
+
+    // Weekly events are entered once and show their next date.
+    const weekly = { title: 'Gemara', date: '2026-11-03', time: '20:00', repeat: 'weekly' };
+    check('weekly next', nextOccurrence(weekly, wed)?.date === '2026-11-24', nextOccurrence(weekly, wed)?.date);
+    check('weekly is current', isCurrentEvent(weekly, wed));
+    check('weekly until', !isCurrentEvent({ ...weekly, until: '2026-11-17' }, wed));
+    const biweekly = { title: 'Lunch', date: '2026-11-04', time: '12:00', repeat: 'biweekly' };
+    check('biweekly next', nextOccurrence(biweekly, wed)?.date === '2026-12-02', nextOccurrence(biweekly, wed)?.date);
+    check('upcoming sorted', upcomingEvents([weekly, { title: 'Erev', date: '2026-11-20', time: '16:45' }], wed)[0].title === 'Erev');
+
+    // Pieces with dates.
+    check('in range', inDateRange({ showFrom: '2026-11-15', showUntil: '2026-11-18' }, wed));
+    check('after range', !inDateRange({ showUntil: '2026-11-17' }, wed));
+    check('before range', !inDateRange({ showFrom: '2026-11-19' }, wed));
+
+    // Shabbos mode window: 20 minutes before 4:45 PM Friday until 10 minutes after 5:47 PM Saturday.
+    const rest = cal.restWindow(wed, {}, { before: 20, after: 10, yomTov: true });
+    check('rest start', rest && rest.start.toISOString() === '2026-11-20T21:25:00.000Z', rest && rest.start.toISOString());
+    check('rest not yet', rest && rest.active === false);
+    const friday = cal.restWindow(new Date('2026-11-20T22:00:00Z'), {}, { before: 20, after: 10 });
+    check('rest active friday', friday && friday.active && friday.kind === 'shabbos');
+    const motzeiLate = cal.restWindow(new Date('2026-11-21T23:10:00Z'), {}, { before: 20, after: 10 });
+    check('rest over', motzeiLate && motzeiLate.active === false && motzeiLate.start.toISOString().startsWith('2026-11-27'), motzeiLate && motzeiLate.start.toISOString());
+
+    // Ready layouts stay inside the screen.
+    const inside = (p) => p && p.x >= 0 && p.y >= 0 && p.x + p.w <= 100 && p.y + p.h <= 100;
+    check('templates fit', TEMPLATES.every((t) => t.items.every((i) => inside(i.landscape) && inside(i.portrait))));
+
+    // Old per-piece font names still work, and extra fonts are counted.
+    check('old font name', canonicalFont('elegant') === 'fraunces');
+    const fontTv = { screens: [{ widgets: [{ settings: { type: { parts: { title: { font: 'inter' }, small: { font: 'modern' } } } } }] }] };
+    check('fonts counted', extraFontsUsed(fontTv).size === 2);
+
+    const modern = normalizeConfig({ tvs: [{ id: 'lobby', theme: { preset: 'midnight' }, shabbosMode: { enabled: true, screenId: 'main' } }], google: { photosClientId: 'x.apps.googleusercontent.com' } });
+    check('modern theme', modern.tvs[0].theme.preset === 'midnight' && modern.tvs[0].theme.cards === 'glass');
+    check('shabbos mode kept', modern.tvs[0].shabbosMode.enabled && modern.tvs[0].shabbosMode.screenId === 'main');
+    check('google kept', modern.google.photosClientId === 'x.apps.googleusercontent.com');
+    check('fade default', modern.tvs[0].transition === 'fade');
 
     const folder = 'https://drive.google.com/drive/u/0/folders/1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd?usp=sharing';
     check('folder id', parseDriveFolderId(folder) === '1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd');

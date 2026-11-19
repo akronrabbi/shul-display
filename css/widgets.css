@@ -54,6 +54,17 @@
   box-sizing: border-box;
 }
 
+/* On the modern looks the backing hugs the mark as a rounded tile. */
+:is([data-cards="glass"], [data-cards="line"])[data-logo="plate"] .tone-clear .logo-img {
+  width: auto;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  flex: 0 1 auto;
+  padding: 5%;
+  border-radius: min(var(--radius, 12px), 22px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
 .tone-ivory .eyebrow { color: var(--eyebrow, #8a6230); }
 .tone-navy .eyebrow { color: var(--eyebrow-on-dark, #e4d2a4); }
 .tone-burgundy .eyebrow,
@@ -255,6 +266,10 @@
   background: var(--inverse-2, #0e1726);
 }
 
+.photos {
+  overflow: hidden;
+}
+
 .photos .photo {
   position: absolute;
   inset: 0;
@@ -262,10 +277,27 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 1.15s ease;
+  transition: opacity 1.4s ease, transform 1.2s cubic-bezier(0.65, 0, 0.35, 1);
+  will-change: opacity, transform;
 }
 
-.photos .photo.on { opacity: 1; }
+.photos .photo.on { opacity: 1; z-index: 1; }
+.photos .photo.instant { transition: none !important; animation: none !important; }
+.photos[data-transition="none"] .photo { transition: none; }
+
+.photos[data-transition="zoom"] .photo { transition: opacity 1.6s ease; }
+.photos[data-transition="zoom"] .photo.on { animation: photo-zoom var(--slide-time, 10s) linear forwards; }
+.photos[data-transition="zoom"] .photo.leaving { transform: scale(1.07); }
+
+@keyframes photo-zoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.07); }
+}
+
+.photos[data-transition="slide"] .photo { opacity: 1; transform: translateX(100%); }
+.photos[data-transition="slide"] .photo.on { transform: translateX(0); }
+.photos[data-transition="slide"] .photo.leaving { transform: translateX(-100%); }
+.photos[data-transition="slide"] .photo:not(.on):not(.leaving) { visibility: hidden; }
 
 .pdf-view {
   height: 100%;
@@ -280,7 +312,10 @@
   display: block;
   max-width: 100%;
   max-height: 100%;
+  transition: opacity 0.45s ease;
 }
+
+.pdf-view canvas.turning { opacity: 0; }
 
 .pdf-page {
   position: absolute;
@@ -478,6 +513,63 @@
   background: color-mix(in srgb, var(--bg, #101a2c) 62%, transparent);
   color: var(--stage-ink, #fffaf3);
 }
+
+/* Card styles. Solid is the look above. Glass and Line are the modern looks. */
+
+[data-cards="glass"] .tone-ivory,
+[data-cards="glass"] .tone-navy {
+  background: var(--glass-bg);
+  color: var(--glass-ink);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: inset 0 0 0 1px var(--glass-line), var(--card-shadow, none);
+}
+
+[data-cards="glass"] .tone-navy { background: var(--glass-bg-2); }
+
+[data-cards="glass"] .tone-burgundy {
+  background: linear-gradient(160deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: var(--card-shadow, none);
+}
+
+[data-cards="glass"] .tone-band,
+[data-cards="line"] .tone-band {
+  box-shadow: none;
+}
+
+[data-cards="glass"] .tone-ivory .eyebrow,
+[data-cards="glass"] .tone-navy .eyebrow,
+[data-cards="glass"] .tone-ivory .event-dow,
+[data-cards="glass"] .tone-navy .event-dow { color: var(--glass-eyebrow); }
+
+[data-cards="glass"] .tone-ivory :is(.translit, .time-when, .quiet),
+[data-cards="glass"] .tone-navy :is(.translit, .time-when, .quiet) { color: var(--glass-muted); }
+
+[data-cards="glass"] :is(.tone-ivory, .tone-navy) :is(.event-row, .zman-row) { border-bottom-color: var(--glass-line); }
+
+[data-cards="line"] .tone-ivory {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), var(--card-shadow, none);
+}
+
+[data-cards="line"] .tone-navy {
+  background: var(--inverse);
+  box-shadow: inset 0 0 0 1px var(--line-strong), var(--card-shadow, none);
+}
+
+[data-cards="line"] .tone-burgundy {
+  background: var(--accent);
+  box-shadow: var(--card-shadow, none);
+}
+
+/* The modern looks use calmer labels and lighter numbers. */
+:is([data-cards="glass"], [data-cards="line"]) .eyebrow { letter-spacing: 0.16em; font-weight: 600; }
+:is([data-cards="glass"], [data-cards="line"]) .rule { opacity: 0.3; }
+:is([data-cards="glass"], [data-cards="line"]) :is(.clock, .time-value) { font-weight: 300; letter-spacing: -0.04em; }
+:is([data-cards="glass"], [data-cards="line"]) :is(.weekday, .parsha-en, .event-title, .text-title, .logo-name, .welcome-line, .welcome-chunk) { font-weight: 500; letter-spacing: -0.01em; }
+:is([data-cards="glass"], [data-cards="line"]) .event-day { font-weight: 300; }
+:is([data-cards="glass"], [data-cards="line"]) .plaque { padding: 5.5cqh 6cqw 5cqh; }
+:is([data-cards="glass"], [data-cards="line"]) .welcome-still { padding: 0 6cqi; }
 
 @media (prefers-reduced-motion: reduce) {
   .welcome-track { animation: none; }

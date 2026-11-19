@@ -29,6 +29,9 @@ function normalizeScreen(screen) {
   next.widgets.forEach((widget) => {
     widget.settings = { ...defaultSettings(widget.type), ...(widget.settings || {}) };
     widget.place = widget.place || {};
+    if (!widget.locked) delete widget.locked;
+    if (!widget.showFrom) delete widget.showFrom;
+    if (!widget.showUntil) delete widget.showUntil;
   });
   return next;
 }
@@ -48,7 +51,34 @@ export function normalizeTv(tv, fallbackName) {
   next.screens = next.screens.map((screen) => normalizeScreen(screen));
   next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
   next.theme = normalizeTheme(next.theme);
+  next.transition = SCREEN_TRANSITIONS.some(([id]) => id === next.transition) ? next.transition : 'fade';
+  next.shabbosMode = normalizeShabbosMode(next.shabbosMode, next.screens);
   return next;
+}
+
+export const SCREEN_TRANSITIONS = [
+  ['fade', 'Soft fade'],
+  ['rise', 'Fade and rise'],
+  ['slide', 'Slide across'],
+  ['none', 'Cut, no movement'],
+];
+
+// Shabbos mode is off unless an editor turns it on. When on, the TV shows one
+// chosen screen from shortly before candle lighting until after havdalah.
+export function normalizeShabbosMode(raw, screens) {
+  const mode = raw && typeof raw === 'object' ? raw : {};
+  const ids = (screens || []).map((screen) => screen.id);
+  const clamp = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.min(240, Math.max(0, Math.round(n))) : fallback;
+  };
+  return {
+    enabled: Boolean(mode.enabled),
+    screenId: ids.includes(mode.screenId) ? mode.screenId : '',
+    before: clamp(mode.before, 20),
+    after: clamp(mode.after, 10),
+    yomTov: mode.yomTov !== false,
+  };
 }
 
 // Old files kept the board on the root. Those become TV 1, named Lobby.
@@ -70,7 +100,10 @@ export function normalizeConfig(config) {
   }
   let activeTv = Number(raw.activeTv);
   if (!Number.isInteger(activeTv) || activeTv < 0 || activeTv >= tvs.length) activeTv = 0;
-  return { version: 2, activeTv, tvs };
+  const google = {
+    photosClientId: String(raw.google?.photosClientId || '').trim().slice(0, 200),
+  };
+  return { version: 2, activeTv, tvs, google };
 }
 
 export function pickTv(config, param) {
