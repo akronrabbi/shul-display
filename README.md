@@ -54,7 +54,7 @@ You can add more than one screen and turn on **Cycle through screens**. Each scr
 
 **Rotate design to fit screen** is separate. Use it when the television is a landscape screen mounted on its side and the computer itself cannot be set to portrait. Off leaves the design as designed. 90° right, 180°, and 90° left turn the design. The link for that TV includes the turn, for example `?rotate=90`.
 
-**Full-screen message** covers only the TV you are editing, for example a simcha in the social hall. Turn it on, then Save. You can also limit it to a start and end in Akron time. The wording already filled in is only a sample. Change it before you turn it on. Preview stays in the editor until you save with the message turned on.
+**Full screen** covers only the TV you are editing, for example a simcha in the social hall. Choose **Message** (words on the theme, an accent color, or a photograph) or **Full-screen picture** (one uploaded or linked image; Show the whole picture puts a soft blurred copy behind it, Fill the screen crops to fit). While the panel is open, the editor's screen shows it as you type; Show the layout instead switches back. Turn it on, then Save. You can also limit it to a start and end in Akron time. The wording already filled in is only a sample. Change it before you turn it on. Preview stays in the editor until you save with the message turned on.
 
 Past events stay in the editor list and disappear from the TV once their date and time have passed. A date with no time stays up through that day.
 

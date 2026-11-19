@@ -314,7 +314,7 @@ async function renderCanvas() {
   if (previewTakeover) {
     const flag = document.createElement('div');
     flag.className = 'preview-flag';
-    flag.textContent = 'Preview only';
+    flag.textContent = tv().takeover.enabled ? 'Full screen: on after you Save' : 'Full screen preview: turned off on the TV';
     canvas.append(flag);
     const host = document.createElement('div');
     host.className = 'takeover-slot';
@@ -594,7 +594,7 @@ function syncSheet() {
   else if (mode === 'multi') title.textContent = 'Line up pieces';
   else if (mode === 'layouts') title.textContent = 'Saved layouts';
   else if (mode === 'history') title.textContent = 'History';
-  else if (mode === 'takeover') title.textContent = 'Full-screen message';
+  else if (mode === 'takeover') title.textContent = 'Full screen';
   else if (selectedId) {
     const widget = findWidget(selectedId);
     title.textContent = widget ? (specOf(widget.type)?.label || 'This piece') : 'This piece';
@@ -822,6 +822,11 @@ function buildInspector() {
   const keepScroll = key === inspectorKey ? inspector.scrollTop : 0;
   inspectorKey = key;
   requestAnimationFrame(() => { inspector.scrollTop = keepScroll; });
+  const wantPreview = mode === 'takeover' && takeoverPeek;
+  if (wantPreview !== previewTakeover) {
+    previewTakeover = wantPreview;
+    renderCanvas();
+  }
   inspector.replaceChildren();
   if (mode === 'theme') {
     buildThemeForm();
@@ -1525,9 +1530,9 @@ function buildWeekForm() {
     inspector.append(el('p', 'note', 'This TV has no welcome line, announcement, or events list yet. Add one from the pieces, or start from a ready layout.'));
   }
   const takeover = el('div', 'week-card');
-  takeover.append(el('span', 'tool-label', 'Full-screen message'));
+  takeover.append(el('span', 'tool-label', 'Full screen (message or picture)'));
   takeover.append(el('p', 'note', board.takeover.enabled ? 'On for this TV.' : 'Off.'));
-  takeover.append(actionButton('Open the full-screen message', () => openMode('takeover')));
+  takeover.append(actionButton('Open full screen', () => openMode('takeover')));
   inspector.append(takeover);
 }
 
@@ -1747,57 +1752,143 @@ function appendTypePanel(target, parts, refresh, fits = true) {
   inspector.append(box);
 }
 
+// While this panel is open the editor's screen shows the full-screen message,
+// so it can be checked as it is typed. "Show the layout" turns that off.
+let takeoverPeek = true;
+
 function buildTakeoverForm() {
   const takeover = tv().takeover;
-  inspector.append(el('h2', 'side-title', 'Full-screen message'));
-  inspector.append(el('p', 'hint', 'This covers only the TV you are editing. The sample wording is only an example. Change it before you turn it on.'));
-  const enabled = checkInput(takeover.enabled, 'Show this message on this TV', (value) => { takeover.enabled = value; });
+  const redraw = () => { if (previewTakeover) renderCanvas(); };
+  const isImage = takeover.kind === 'image';
+  inspector.append(el('h2', 'side-title', 'Full screen'));
+  inspector.append(el('p', 'hint', 'Covers the whole screen of the TV you are editing, for example a simcha in the social hall. The screen on the left shows what it will look like.'));
+  const enabled = checkInput(takeover.enabled, 'Show it on this TV', (value) => { takeover.enabled = value; redraw(); });
+  enabled.classList.add('big-check');
   inspector.append(enabled);
-  inspector.append(field('Small line', textInput(takeover.eyebrow, (value) => { takeover.eyebrow = value; if (previewTakeover) renderCanvas(); })));
-  inspector.append(field('Main message', areaInput(takeover.title, (value) => { takeover.title = value; if (previewTakeover) renderCanvas(); })));
-  inspector.append(field('Second line', textInput(takeover.subtitle, (value) => { takeover.subtitle = value; if (previewTakeover) renderCanvas(); })));
-  inspector.append(field('Details', textInput(takeover.details, (value) => { takeover.details = value; if (previewTakeover) renderCanvas(); })));
-  inspector.append(field('Footer', textInput(takeover.footer, (value) => { takeover.footer = value; if (previewTakeover) renderCanvas(); })));
-  const templates = el('div', 'templates');
-  [['classic', 'Navy and gold'], ['burgundy', 'Burgundy'], ['photo', 'Photograph']].forEach(([value, label]) => {
-    const button = el('button', value === takeover.template ? 'on' : '', label);
+  inspector.append(el('p', 'note', takeover.enabled
+    ? 'On. After you Save, this TV shows it instead of its screens.'
+    : 'Off. You can set it up and look at it here first. Turn it on and Save when it should show.'));
+
+  const kindRow = el('div', 'ground-row');
+  [['message', 'Message'], ['image', 'Full-screen picture']].forEach(([value, label]) => {
+    const button = el('button', (takeover.kind || 'message') === value ? 'on' : '', label);
     button.type = 'button';
     button.addEventListener('click', () => {
-      takeover.template = value;
+      takeover.kind = value;
       markDirty();
+      renderCanvas();
       buildInspector();
-      if (previewTakeover) renderCanvas();
     });
-    templates.append(button);
+    kindRow.append(button);
   });
-  inspector.append(field('Look', templates));
-  inspector.append(fileButton('Upload a background photo', 'image/*', async (file) => {
-    const uploaded = await storeFile(file);
-    if (!uploaded) return;
-    takeover.backgroundUrl = uploaded.url;
-    takeover.backgroundAssetId = null;
-    markDirty();
-    if (previewTakeover) renderCanvas();
-  }));
-  inspector.append(checkInput(takeover.scheduleEnabled, 'Only between a start and an end', (value) => { takeover.scheduleEnabled = value; }));
-  const start = document.createElement('input');
-  start.type = 'datetime-local';
-  start.value = takeover.start || '';
-  start.addEventListener('change', () => { takeover.start = start.value; markDirty(); });
-  const end = document.createElement('input');
-  end.type = 'datetime-local';
-  end.value = takeover.end || '';
-  end.addEventListener('change', () => { takeover.end = end.value; markDirty(); });
-  inspector.append(field('Start (Akron time)', start));
-  inspector.append(field('End (Akron time)', end));
-  const preview = actionButton(previewTakeover ? 'Back to the layout' : 'Preview this message here', () => {
-    previewTakeover = !previewTakeover;
-    renderCanvas();
+  inspector.append(field('What to show', kindRow));
+
+  if (isImage) {
+    const thumb = el('div', 'takeover-thumb');
+    if (takeover.imageUrl) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = takeover.imageUrl;
+      thumb.append(img);
+    } else {
+      thumb.append(el('span', 'note', 'No picture yet'));
+    }
+    inspector.append(thumb);
+    inspector.append(fileButton(takeover.imageUrl ? 'Replace the picture' : 'Upload a picture', 'image/*', async (file) => {
+      setStatus('Uploading the picture...', 'busy');
+      const uploaded = await storeFile(file);
+      if (!uploaded) return;
+      takeover.imageUrl = uploaded.url;
+      markDirty();
+      renderCanvas();
+      buildInspector();
+    }));
+    const link = document.createElement('input');
+    link.type = 'text';
+    link.placeholder = 'Or paste a picture address or Google Drive file link';
+    link.spellcheck = false;
+    const useLink = actionButton('Use this link', () => {
+      const found = classifyImageList(link.value).images[0];
+      if (!found) {
+        setStatus('That link is not a picture address this page can show.', 'error');
+        return;
+      }
+      takeover.imageUrl = found.url;
+      markDirty();
+      renderCanvas();
+      buildInspector();
+    });
+    inspector.append(field('Picture link', link), useLink);
+    inspector.append(field('Fit', selectInput(takeover.imageFit || 'contain', [
+      ['contain', 'Show the whole picture (soft blurred edges)'],
+      ['cover', 'Fill the screen (edges may be cropped)'],
+    ], (value) => { takeover.imageFit = value; redraw(); })));
+    inspector.append(el('p', 'note', 'Tip: a flyer made for a TV is 1920 by 1080 pixels (or 1080 by 1920 on a tall screen), so it fills the screen exactly.'));
+  } else {
+    inspector.append(field('Small line', textInput(takeover.eyebrow, (value) => { takeover.eyebrow = value; redraw(); })));
+    inspector.append(field('Main message', areaInput(takeover.title, (value) => { takeover.title = value; redraw(); })));
+    inspector.append(field('Second line', textInput(takeover.subtitle, (value) => { takeover.subtitle = value; redraw(); })));
+    inspector.append(field('Details', textInput(takeover.details, (value) => { takeover.details = value; redraw(); })));
+    inspector.append(field('Footer', textInput(takeover.footer, (value) => { takeover.footer = value; redraw(); })));
+    const templates = el('div', 'ground-row');
+    [['classic', 'Theme'], ['burgundy', 'Accent color'], ['photo', 'Photograph']].forEach(([value, label]) => {
+      const button = el('button', value === takeover.template ? 'on' : '', label);
+      button.type = 'button';
+      button.addEventListener('click', () => {
+        takeover.template = value;
+        markDirty();
+        buildInspector();
+        renderCanvas();
+      });
+      templates.append(button);
+    });
+    inspector.append(field('Look', templates));
+    const photoRow = el('div', 'tool-row');
+    photoRow.append(fileButton(takeover.backgroundUrl ? 'Replace the background photo' : 'Upload a background photo', 'image/*', async (file) => {
+      const uploaded = await storeFile(file);
+      if (!uploaded) return;
+      takeover.backgroundUrl = uploaded.url;
+      takeover.backgroundAssetId = null;
+      if (takeover.template !== 'photo') takeover.template = 'photo';
+      markDirty();
+      renderCanvas();
+      buildInspector();
+    }));
+    if (takeover.backgroundUrl || takeover.backgroundAssetId) {
+      photoRow.append(actionButton('Remove the photo', () => {
+        takeover.backgroundUrl = '';
+        takeover.backgroundAssetId = null;
+        markDirty();
+        renderCanvas();
+        buildInspector();
+      }));
+    }
+    inspector.append(photoRow);
+  }
+
+  const when = el('div', 'tool-group');
+  when.append(el('span', 'tool-label', 'When'));
+  when.append(checkInput(takeover.scheduleEnabled, 'Only between a start and an end', (value) => { takeover.scheduleEnabled = value; buildInspector(); }));
+  if (takeover.scheduleEnabled) {
+    const start = document.createElement('input');
+    start.type = 'datetime-local';
+    start.value = takeover.start || '';
+    start.addEventListener('change', () => { takeover.start = start.value; markDirty(); });
+    const end = document.createElement('input');
+    end.type = 'datetime-local';
+    end.value = takeover.end || '';
+    end.addEventListener('change', () => { takeover.end = end.value; markDirty(); });
+    const row = el('div', 'date-row');
+    row.append(field('Start (Akron time)', start), field('End (Akron time)', end));
+    when.append(row);
+  }
+  inspector.append(when);
+
+  inspector.append(actionButton(takeoverPeek ? 'Show the layout instead' : 'Show the full screen here', () => {
+    takeoverPeek = !takeoverPeek;
     buildInspector();
-  });
-  inspector.append(preview);
-  inspector.append(el('p', 'note', 'Preview stays on this page. The TV changes only after you turn the message on and press Save.'));
-  appendTypePanel(takeover, TYPE_PARTS.takeover, () => { if (previewTakeover) renderCanvas(); }, true);
+  }));
+  if (!isImage) appendTypePanel(takeover, TYPE_PARTS.takeover, redraw, true);
 }
 
 function reorder(id, direction) {
@@ -2050,7 +2141,7 @@ function paintPalette() {
     palette.append(button);
   });
   const block = el('div', 'side-block');
-  const takeover = el('button', 'btn', 'Full-screen message');
+  const takeover = el('button', 'btn', 'Full screen: message or picture');
   takeover.type = 'button';
   takeover.addEventListener('click', () => {
     mode = 'takeover';
@@ -2068,7 +2159,7 @@ function paintPalette() {
   });
   block.append(themeButton);
   block.append(takeover);
-  if (tv().takeover.enabled) block.append(el('p', 'note', 'The full-screen message is on for this TV. It shows after you save.'));
+  if (tv().takeover.enabled) block.append(el('p', 'note', 'Full screen is on for this TV. It shows after you save.'));
   palette.append(block);
 
   const themeBlock = el('div', 'side-block');

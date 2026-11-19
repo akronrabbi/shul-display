@@ -578,3 +578,19 @@
 
 /* While measuring the size that fills a box, every part counts as 100%. */
 .fit-measure, .fit-measure * { --t-scale: 1 !important; }
+
+.takeover-image { background: #000; overflow: hidden; }
+.takeover-image-back {
+  position: absolute;
+  inset: -6%;
+  background: center / cover no-repeat;
+  filter: blur(40px) brightness(0.55) saturate(1.2);
+  transform: scale(1.1);
+}
+.takeover-image-main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.takeover-image .empty-note { color: #fff; }

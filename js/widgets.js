@@ -176,6 +176,9 @@ export function defaultTakeover() {
     footer: 'Revere Road Synagogue  -  Akron',
     backgroundAssetId: null,
     backgroundUrl: '',
+    kind: 'message',
+    imageUrl: '',
+    imageFit: 'contain',
     scheduleEnabled: false,
     start: '',
     end: '',
@@ -815,8 +818,36 @@ export function takeoverActive(takeover, now, force) {
   return true;
 }
 
+// A full-screen picture: one image over the whole TV. "Show the whole picture"
+// puts a soft, blurred copy behind it so a flyer of any shape fills the screen.
+function renderTakeoverImage(host, takeover) {
+  const root = h('div', 'takeover takeover-image');
+  const url = safeImageUrl(takeover.imageUrl);
+  if (!url) {
+    root.append(h('div', 'empty-note', 'Add a picture in the editor.'));
+    host.append(root);
+    return () => host.replaceChildren();
+  }
+  const fit = takeover.imageFit === 'cover' ? 'cover' : 'contain';
+  root.dataset.fit = fit;
+  if (fit === 'contain') {
+    const back = h('div', 'takeover-image-back');
+    back.style.backgroundImage = `url("${url.replace(/"/g, '')}")`;
+    root.append(back);
+  }
+  const img = h('img', 'takeover-image-main');
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer';
+  img.src = url;
+  img.style.objectFit = fit;
+  root.append(img);
+  host.append(root);
+  return () => host.replaceChildren();
+}
+
 export async function renderTakeover(host, takeover, ctx) {
   host.replaceChildren();
+  if (takeover.kind === 'image') return renderTakeoverImage(host, takeover);
   const template = takeover.template || 'classic';
   const root = h('div', `takeover takeover-${template}`);
   let background = '';
