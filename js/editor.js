@@ -2422,13 +2422,84 @@ function stamp(value) {
   return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function replaceActiveTv(saved) {
-  const source = normalize(saved);
-  const incoming = source.tvs.find((item) => item.id === tv().id) || source.tvs[state.activeTv] || source.tvs[0];
-  if (!incoming) return;
-  const current = tv();
-  const id = current.id;
-  Object.assign(current, incoming, { id });
+function freshWidgets(widgets) {
+  return structuredClone(widgets || []).map((widget) => ({ ...widget, id: uid('w') }));
+}
+
+// What to take from a saved layout, and where to put it. A saved layout holds
+// every TV and all their screens, so the person picks one screen (or one TV)
+// from it and puts it on the screen or TV open in the editor.
+function layoutUsePanel(layoutName, saved, say) {
+  const panel = el('div', 'use-panel');
+  const sources = [];
+  saved.tvs.forEach((item, tvIndex) => {
+    item.screens.forEach((scr, screenIndex) => {
+      sources.push({ tvIndex, screenIndex, label: `${item.name || `TV ${tvIndex + 1}`}: ${scr.name || `Screen ${screenIndex + 1}`} (${scr.widgets.length} piece${scr.widgets.length === 1 ? '' : 's'})` });
+    });
+  });
+  const pick = document.createElement('select');
+  sources.forEach((item, index) => {
+    const option = document.createElement('option');
+    option.value = String(index);
+    option.textContent = item.label;
+    pick.append(option);
+  });
+  // Start on the screen that was open in the editor when the layout was saved.
+  const fromTv = Math.min(saved.tvs.length - 1, Math.max(0, Number(saved.activeTv) || 0));
+  const fromScreen = Math.max(0, Number(saved.tvs[fromTv]?.activeScreen) || 0);
+  const preferred = sources.findIndex((item) => item.tvIndex === fromTv && item.screenIndex === fromScreen);
+  pick.value = String(Math.max(0, preferred));
+  if (sources.length > 1) panel.append(field('Take this screen from the layout', pick));
+  const chosen = () => sources[Number(pick.value) || 0];
+  const sourceTv = () => saved.tvs[chosen().tvIndex];
+  const sourceScreen = () => sourceTv().screens[chosen().screenIndex];
+  const here = `"${screen().name || 'this screen'}" on ${tv().name || 'this TV'}`;
+  const done = (text) => {
+    selectedId = null;
+    multi.clear();
+    markDirty();
+    paintChrome();
+    renderCanvas();
+    setStatus(`${text} Press Save to send it to the TV.`, 'dirty');
+    say('Done. Press Save (top right) to send it to the TV. Undo takes it back.', 'busy');
+  };
+
+  const row = el('div', 'tool-row');
+  const replaceScreen = () => {
+    screen().widgets = freshWidgets(sourceScreen().widgets);
+    done(`Put "${layoutName}" on ${here}.`);
+  };
+  row.append(screen().widgets.length
+    ? tapTwice('Replace this screen', `Tap again: replace ${screen().name || 'this screen'}`, replaceScreen)
+    : actionButton('Put on this screen', replaceScreen));
+  row.append(actionButton('Add as a new screen', () => {
+    const from = sourceScreen();
+    tv().screens.push({
+      id: uid('s'),
+      name: from.name && from.name !== 'Main' ? from.name : layoutName.slice(0, 40),
+      duration: from.duration || 20,
+      widgets: freshWidgets(from.widgets),
+    });
+    tv().activeScreen = tv().screens.length - 1;
+    done(`Added "${layoutName}" as a new screen on ${tv().name || 'this TV'}.`);
+  }));
+  row.append(tapTwice('Replace this whole TV', `Tap again: replace all of ${tv().name || 'this TV'}`, () => {
+    const from = structuredClone(sourceTv());
+    const current = tv();
+    // Keep this TV's own name, address, and rotation. Take everything else.
+    Object.assign(current, from, { id: current.id, name: current.name, rotation: current.rotation, activeScreen: 0 });
+    done(`${current.name || 'This TV'} now matches "${from.name || 'the saved TV'}" from "${layoutName}".`);
+  }));
+  panel.append(row);
+  panel.append(el('p', 'note', 'These change the editor first, so you can look before the TV does. Replace this whole TV copies every screen and the theme of the TV chosen above.'));
+
+  const all = tapTwice('Put on every TV now', 'Tap again: replace every TV and save', async () => {
+    if (await keepOnline(saved)) setStatus(`"${layoutName}" is now on every TV. The board it replaced is in History.`, 'saved');
+  });
+  all.classList.add('btn-quiet');
+  panel.append(all);
+  if (sources.length < 2) pick.hidden = true;
+  return panel;
 }
 
 async function keepOnline(next) {
@@ -2541,19 +2612,18 @@ async function buildLayouts() {
       return full.rows[0].config;
     };
     const rowActions = el('div', 'row-actions');
-    rowActions.append(tapTwice('Put on every TV', 'Tap again: replace every TV', async () => {
+    const use = actionButton('Use this layout...', async () => {
+      use.disabled = true;
       const config = await open();
-      if (config && await keepOnline(config)) setStatus(`"${row.name}" is now on every TV. The board it replaced is in History.`, 'saved');
-    }));
-    if (state.tvs.length > 1) {
-      rowActions.append(tapTwice('This TV only', `Tap again: replace ${tv().name || 'this TV'}`, async () => {
-        const config = await open();
-        if (!config) return;
-        state = structuredClone(state);
-        replaceActiveTv(config);
-        if (await keepOnline(state)) setStatus(`Put "${row.name}" on ${tv().name || 'this TV'}. The other TVs stayed as they were.`, 'saved');
-      }));
-    }
+      use.disabled = false;
+      if (!config) return;
+      const panel = layoutUsePanel(row.name, normalize(config), rowSay);
+      card.querySelector('.use-panel')?.remove();
+      card.insertBefore(panel, rowActions);
+      use.hidden = true;
+    });
+    use.classList.add('btn-primary');
+    rowActions.append(use);
     rowActions.append(actionButton('Rename', () => {
       if (row.locked) {
         rowSay('That layout is locked. Unlock it first.', 'error');
