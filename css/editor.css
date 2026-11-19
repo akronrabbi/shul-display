@@ -1144,3 +1144,18 @@ body.is-dragging .screen-canvas::after { opacity: 1; }
 .size-row .btn.mini { padding: 4px 8px; font-size: 12px; }
 .size-row input[type="range"].unset { opacity: 0.4; }
 .size-row > span { color: var(--ui-muted); font-size: 12px; min-width: 1.4em; }
+
+.takeover-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  margin: 0 0 10px;
+  border-radius: 10px;
+  background: #101a2c;
+  overflow: hidden;
+}
+.takeover-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.takeover-thumb .note { color: #c9ced8; }
+.big-check { font-size: 14px; font-weight: 600; }
+.preview-flag { z-index: 60; }
