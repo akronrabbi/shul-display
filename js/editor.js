@@ -311,11 +311,18 @@ async function renderCanvas() {
   canvas.replaceChildren();
   applyTheme(canvas, tv().theme);
   fitCanvas();
+  // The board shows the full screen only while its panel is open.
+  previewTakeover = mode === 'takeover' && takeoverPeek;
+  canvas.classList.toggle('showing-full-screen', previewTakeover);
   if (previewTakeover) {
-    const flag = document.createElement('div');
-    flag.className = 'preview-flag';
-    flag.textContent = tv().takeover.enabled ? 'Full screen: on after you Save' : 'Full screen preview: turned off on the TV';
-    canvas.append(flag);
+    const bar = el('div', 'preview-bar');
+    bar.append(el('span', 'preview-flag', tv().takeover.enabled ? 'Full screen: on after you Save' : 'Full screen preview: off on the TV'));
+    const back = el('button', 'preview-back', 'Back to the layout');
+    back.type = 'button';
+    back.addEventListener('pointerdown', (event) => event.stopPropagation());
+    back.addEventListener('click', () => leaveFullScreen());
+    bar.append(back);
+    canvas.append(bar);
     const host = document.createElement('div');
     host.className = 'takeover-slot';
     host.style.inset = '0';
@@ -823,10 +830,7 @@ function buildInspector() {
   inspectorKey = key;
   requestAnimationFrame(() => { inspector.scrollTop = keepScroll; });
   const wantPreview = mode === 'takeover' && takeoverPeek;
-  if (wantPreview !== previewTakeover) {
-    previewTakeover = wantPreview;
-    renderCanvas();
-  }
+  if (wantPreview !== canvas.classList.contains('showing-full-screen')) renderCanvas();
   inspector.replaceChildren();
   if (mode === 'theme') {
     buildThemeForm();
@@ -1752,6 +1756,14 @@ function appendTypePanel(target, parts, refresh, fits = true) {
   inspector.append(box);
 }
 
+function leaveFullScreen() {
+  mode = 'screen';
+  selectedId = null;
+  multi.clear();
+  delete document.body.dataset.sheet;
+  buildInspector();
+}
+
 // While this panel is open the editor's screen shows the full-screen message,
 // so it can be checked as it is typed. "Show the layout" turns that off.
 let takeoverPeek = true;
@@ -2416,6 +2428,10 @@ function bindChrome() {
       duplicateWidget(selectedId);
       return;
     }
+    if (event.key === 'Escape' && mode === 'takeover') {
+      leaveFullScreen();
+      return;
+    }
     if (event.key === 'Escape' && (selectedId || multi.size)) {
       multi.clear();
       selectedId = null;
@@ -2454,6 +2470,10 @@ function bindChrome() {
     event.returnValue = '';
   });
   canvas.addEventListener('pointerdown', (event) => {
+    if (previewTakeover && !event.target.closest('.preview-bar')) {
+      leaveFullScreen();
+      return;
+    }
     if (event.target !== canvas) return;
     selectedId = null;
     multi.clear();
