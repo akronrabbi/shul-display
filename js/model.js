@@ -115,8 +115,23 @@ export function normalizeConfig(config) {
     photosClientId: String(raw.google?.photosClientId || '').trim().slice(0, 200),
   };
   // Every picture uploaded or copied from Google Photos, so it can be used again.
+  // Pictures already used on the board count too, including ones added before
+  // the library existed.
+  const used = [];
+  for (const tv of tvs) {
+    for (const screen of tv.screens) {
+      for (const widget of screen.widgets) {
+        if (widget.type !== 'photos') continue;
+        for (const image of widget.settings.images || []) {
+          if (image?.url) used.push({ url: image.url, name: image.name || '', from: image.from === 'google-photos' ? 'google-photos' : 'upload' });
+        }
+      }
+    }
+    if (tv.takeover?.imageUrl) used.push({ url: tv.takeover.imageUrl, name: 'Full-screen picture', from: 'upload' });
+    if (tv.takeover?.backgroundUrl) used.push({ url: tv.takeover.backgroundUrl, name: 'Full-screen background', from: 'upload' });
+  }
   const seen = new Set();
-  const library = (Array.isArray(raw.library) ? raw.library : [])
+  const library = [...(Array.isArray(raw.library) ? raw.library : []), ...used]
     .filter((item) => item && /^https?:\/\//i.test(String(item.url || '')) && !seen.has(item.url) && seen.add(item.url))
     .slice(-1000)
     .map((item) => ({ url: String(item.url), name: String(item.name || '').slice(0, 120), from: item.from === 'google-photos' ? 'google-photos' : 'upload', at: String(item.at || '') }));
