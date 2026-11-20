@@ -4,6 +4,7 @@ import { upcomingEvents, formatClockNumbers, eventDateParts, isCurrentEvent } fr
 import { safeImageUrl, PHOTOS_HELP } from './images.js';
 import { driveRefreshMs, explainDriveError, listDriveFolderImages } from './drive.js';
 import { albumKey, albumPhotoUrl, cleanAlbumLink } from './albums.js';
+import { fillRich, richFor } from './richtext.js';
 
 // The photo list for a Google Photos album link, published with the site by
 // the scheduled GitHub job. Null until the first check has run.
@@ -463,15 +464,16 @@ function mountWelcome(body, widget) {
     const track = h('div', 'welcome-track');
     const seconds = Math.max(12, Math.round(text.length / 4));
     track.style.setProperty('--ticker-time', `${seconds}s`);
-    track.append(chunk(text, settings.type));
-    track.append(chunk(text, settings.type));
+    track.append(chunk(text, settings.type, settings.textHtml));
+    track.append(chunk(text, settings.type, settings.textHtml));
     root.append(track);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       track.style.animation = 'none';
     }
   } else {
     const box = h('div', 'welcome-still');
-    const line = h('div', 'welcome-line', text);
+    const line = h('div', 'welcome-line');
+    fillRich(line, text, settings.textHtml);
     line.dir = 'auto';
     stylePart(line, settings.type, 'line');
 
@@ -483,8 +485,9 @@ function mountWelcome(body, widget) {
   return () => bag.forEach((fn) => fn());
 }
 
-function chunk(text, type) {
-  const node = h('span', 'welcome-chunk', text);
+function chunk(text, type, html) {
+  const node = h('span', 'welcome-chunk');
+  fillRich(node, text, html);
   node.dir = 'auto';
   stylePart(node, type, 'line');
   return node;
@@ -809,22 +812,34 @@ function mountText(body, widget) {
   const grow = h('div', 'grow');
   const block = h('div', 'text-fit');
   if (settings.title) {
-    const title = piece('text-title', settings.title, settings.type, 'title');
+    const title = piece('text-title', '', settings.type, 'title');
+    fillRich(title, settings.title, settings.titleHtml);
     title.dir = 'auto';
     block.append(title);
   }
   if (settings.body) {
     const copy = piece('text-body', '', settings.type, 'body');
     copy.dir = 'auto';
-    const useParas = Boolean(settings.type?.parts?.body?.para);
-    String(settings.body).split('\n').forEach((line, index) => {
-      if (useParas) {
-        copy.append(h('div', 'para-block', line));
-        return;
-      }
-      if (index) copy.append(document.createElement('br'));
-      copy.append(document.createTextNode(line));
-    });
+    const useParas = Boolean(settings.type?.parts?.body?.para || settings.type?.lines?.['text-body']?.para);
+    const rich = richFor(settings.body, settings.bodyHtml);
+    if (rich && useParas) {
+      rich.split('<br>').forEach((line) => {
+        const para = h('div', 'para-block');
+        para.innerHTML = line;
+        copy.append(para);
+      });
+    } else if (rich) {
+      copy.innerHTML = rich;
+    } else {
+      String(settings.body).split('\n').forEach((line, index) => {
+        if (useParas) {
+          copy.append(h('div', 'para-block', line));
+          return;
+        }
+        if (index) copy.append(document.createElement('br'));
+        copy.append(document.createTextNode(line));
+      });
+    }
     block.append(copy);
   }
   grow.append(block);
@@ -964,13 +979,15 @@ export async function renderTakeover(host, takeover, ctx) {
   const copy = h('div', 'takeover-copy');
   if (takeover.eyebrow) copy.append(piece('eyebrow', takeover.eyebrow, takeover.type, 'small'));
   const titleBox = h('div', 'title-box');
-  const title = piece('title-fit', takeover.title || '', takeover.type, 'title');
+  const title = piece('title-fit', '', takeover.type, 'title');
+  fillRich(title, takeover.title || '', takeover.titleHtml);
   title.dir = 'auto';
   titleBox.append(title);
   copy.append(titleBox);
   copy.append(h('div', 'rule'));
   if (takeover.subtitle) {
-    const sub = piece('takeover-sub', takeover.subtitle, takeover.type, 'body');
+    const sub = piece('takeover-sub', '', takeover.type, 'body');
+    fillRich(sub, takeover.subtitle, takeover.subtitleHtml);
     sub.dir = 'auto';
     copy.append(sub);
   }

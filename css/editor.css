@@ -1329,3 +1329,87 @@ details.photo-section > summary.photo-section-title { cursor: pointer; }
   background: rgba(29, 53, 87, 0.6);
   pointer-events: none;
 }
+
+/* Typing with styles */
+.rich-bar { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; align-items: center; }
+.rich-tool {
+  min-width: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 7px;
+  background: var(--ui-panel);
+  font: 650 12.5px/1 var(--ui-font);
+}
+.rich-tool:hover { background: var(--ui-sunk); }
+.rich-tool.bold { font-weight: 800; }
+.rich-tool.italic { font-style: italic; font-family: Georgia, serif; }
+.rich-bar input[type="color"] { width: 34px; height: 28px; padding: 2px; border: 1px solid var(--ui-line-strong); border-radius: 7px; background: #fff; }
+.rich-box {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 8px;
+  background: var(--ui-panel);
+  line-height: 1.4;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.rich-box.multi { min-height: 84px; }
+.rich-box:focus { border-color: var(--ui-accent); box-shadow: 0 0 0 3px var(--ui-accent-soft); }
+.rich-hint { margin: 4px 0 0; }
+.rich-hint[data-kind="error"] { color: var(--ui-warn); }
+
+/* Each line of text */
+.lines-section { margin: 10px 0 14px; }
+.line-list { display: flex; flex-direction: column; gap: 6px; }
+.line-row { border: 1px solid var(--ui-line); border-radius: 10px; padding: 8px 10px; background: var(--ui-panel); }
+.line-row.picked { border-color: #4c8dff; box-shadow: 0 0 0 2px rgba(76, 141, 255, 0.2); }
+.line-head { display: grid; grid-template-columns: minmax(0, 1fr) 96px 44px 30px; gap: 6px; align-items: center; }
+.line-name { border: 0; background: none; padding: 0; text-align: left; font-weight: 600; font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-name:hover { color: var(--ui-accent); text-decoration: underline; }
+.line-head input[type="range"] { width: 100%; accent-color: var(--ui-accent); }
+.line-size { font-size: 12px; color: var(--ui-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.line-toggle { height: 28px; border: 1px solid var(--ui-line-strong); border-radius: 7px; background: var(--ui-panel); font-weight: 800; }
+.line-toggle.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #fff; }
+.line-more summary { margin-top: 4px; font-size: 12px; color: var(--ui-muted); cursor: pointer; }
+.type-advanced { margin: 10px 0; }
+.type-advanced > summary { font-size: 12.5px; font-weight: 600; color: var(--ui-muted); cursor: pointer; }
+
+/* The toolbar on the screen */
+.screen-canvas .line-picked { outline: 2px solid #4c8dff; outline-offset: 2px; border-radius: 3px; }
+.line-bar {
+  position: absolute;
+  z-index: 90;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: min(560px, calc(100vw - 16px));
+  padding: 6px;
+  border-radius: 12px;
+  background: #16181d;
+  color: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font: 13px/1 var(--ui-font);
+}
+.line-bar-name { padding: 0 6px; font-size: 12px; font-weight: 650; color: #c9d4e8; }
+.line-bar-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: 650 13px/1 var(--ui-font);
+}
+.line-bar-btn:hover { background: rgba(255, 255, 255, 0.2); }
+.line-bar-btn.on { background: #4c8dff; }
+.line-bar-btn.bold { font-weight: 800; }
+.line-bar-btn.italic { font-style: italic; font-family: Georgia, serif; }
+.line-bar-size { min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
+.line-bar input[type="color"] { width: 30px; height: 30px; padding: 2px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.1); }
+.line-bar select { height: 30px; max-width: 150px; border: 0; border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: #fff; }
+.line-bar select option { color: #16181d; }
+@media (max-width: 820px) { .line-bar-btn, .line-bar select, .line-bar input[type="color"] { height: 40px; min-width: 40px; } }

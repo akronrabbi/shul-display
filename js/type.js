@@ -48,6 +48,11 @@ export function extraFontsUsed(tv, skip) {
       const id = canonicalFont(style?.font);
       if (id && id !== 'theme') used.add(id);
     });
+    Object.entries(target?.type?.lines || {}).forEach(([key, style]) => {
+      if (skip && skip.target === target && skip.line === key) return;
+      const id = canonicalFont(style?.font);
+      if (id && id !== 'theme') used.add(id);
+    });
   };
   (tv?.screens || []).forEach((screen) => (screen.widgets || []).forEach((widget) => visit(widget.settings)));
   if (tv?.takeover) visit(tv.takeover);
@@ -137,9 +142,33 @@ export function setPart(target, partId, patch) {
   else delete type.parts[partId];
 }
 
+// Each line of text has a name (its data-line), such as clock, date-he, or
+// time-value. A style set on one line wins over the style of its group (part).
+export function lineKey(el) {
+  if (!el) return '';
+  if (el.dataset.line) return el.dataset.line;
+  const token = [...el.classList].find((name) => name !== 'quiet' && name !== 'hebrew-line' && name !== 'typed' && !name.startsWith('js-'));
+  if (token) el.dataset.line = token;
+  return token || '';
+}
+
+export function setLine(target, key, patch) {
+  const type = ensureType(target);
+  if (!type.lines || typeof type.lines !== 'object') type.lines = {};
+  const next = cleanPart({ ...(type.lines[key] || {}), ...patch });
+  if (Object.keys(next).length) type.lines[key] = next;
+  else delete type.lines[key];
+  if (!Object.keys(type.lines).length) delete type.lines;
+}
+
 export function stylePart(el, type, partId) {
   if (!el) return;
-  const style = type?.parts?.[partId];
+  const key = lineKey(el);
+  applyStyle(el, type?.parts?.[partId]);
+  if (key) applyStyle(el, type?.lines?.[key]);
+}
+
+function applyStyle(el, style) {
   if (!style) return;
   const scale = Number(style.size);
   if (scale && scale !== 100) el.style.setProperty('--t-scale', String(scale / 100));

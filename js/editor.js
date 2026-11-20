@@ -2,13 +2,14 @@ import { createCalendar } from './calendar.js';
 import { authReady, currentUser, editorToken, sendEmailCode, signInWithCode, signInWithGoogle, signOut } from './auth.js';
 import { SCREEN_TRANSITIONS, blankTv, normalizeConfig as normalize, slugify, tvPageUrl, uniqueId } from './model.js';
 import { CARD_STYLES, FONT_PAIRINGS, PRESETS, applyTheme, normalizeTheme, resolveTheme } from './themes.js';
-import { FIT_TYPES, MAX_EXTRA_FONTS, TEXT_FONTS, TYPE_PARTS, canonicalFont, extraFontsUsed, setFit, setPart } from './type.js';
+import { FIT_TYPES, MAX_EXTRA_FONTS, TEXT_FONTS, TYPE_PARTS, canonicalFont, extraFontsUsed, setFit, setLine, setPart } from './type.js';
 import { createStorage, collectAssetIds } from './storage.js';
 import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { explainDriveError, listDriveFolderImages } from './drive.js';
 import { inDateRange, isCurrentEvent } from './events.js';
 import { readTvStatus } from './cloud.js';
 import { cleanAlbumLink } from './albums.js';
+import { richFor, richToText, sanitizeRich, textToRich } from './richtext.js';
 import { TEMPLATES, applyTemplate } from './templates.js';
 import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosAccount, photosConnected, photosRemembered, pickPhotos } from './gphotos.js';
 import {
@@ -364,6 +365,7 @@ function clearMounts() {
 }
 
 async function renderCanvas() {
+  hideLineBar();
   const token = ++renderToken;
   clearMounts();
   canvas.replaceChildren();
@@ -717,6 +719,116 @@ function field(label, control) {
   return wrap;
 }
 
+// A text box where highlighted words can be made bigger, smaller, bold,
+// italic, or a color. It keeps the plain words (target[key]) and the styled
+// version (target[key + 'Html']) together.
+function richField(label, target, key, { multiline = true, refresh = () => {} } = {}) {
+  const wrap = el('div', 'field rich-field');
+  wrap.append(el('span', '', label));
+  const bar = el('div', 'rich-bar');
+  const box = document.createElement('div');
+  box.className = `rich-box${multiline ? ' multi' : ''}`;
+  box.contentEditable = 'true';
+  box.setAttribute('role', 'textbox');
+  box.setAttribute('aria-label', label);
+  box.spellcheck = true;
+  box.innerHTML = richFor(target[key], target[`${key}Html`]) || textToRich(target[key] || '');
+  const hint = el('p', 'note rich-hint', 'Highlight words, then press a button above.');
+  const commit = () => {
+    const html = sanitizeRich(box.innerHTML);
+    const text = richToText(html);
+    target[key] = text;
+    if (/<span/.test(html)) target[`${key}Html`] = html;
+    else delete target[`${key}Html`];
+    markDirty();
+    if (selectedId) refreshWidget(selectedId);
+    refresh();
+  };
+  box.addEventListener('input', commit);
+  box.addEventListener('keydown', (event) => {
+    if (!multiline && event.key === 'Enter') event.preventDefault();
+  });
+  box.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const text = event.clipboardData?.getData('text/plain') || '';
+    document.execCommand('insertText', false, multiline ? text : text.replace(/\s*\n\s*/g, ' '));
+  });
+  const wrapSelection = (style) => {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed || !box.contains(range.commonAncestorContainer)) {
+      hint.textContent = 'First highlight the words you want to change.';
+      hint.dataset.kind = 'error';
+      return false;
+    }
+    const span = document.createElement('span');
+    Object.assign(span.style, style);
+    span.append(range.extractContents());
+    range.insertNode(span);
+    selection.removeAllRanges();
+    const again = document.createRange();
+    again.selectNodeContents(span);
+    selection.addRange(again);
+    hint.textContent = 'Highlight words, then press a button above.';
+    delete hint.dataset.kind;
+    commit();
+    return true;
+  };
+  const tool = (text, title, run) => {
+    const button = el('button', 'rich-tool', text);
+    button.type = 'button';
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    // Keep the highlighted words selected while the button is pressed.
+    button.addEventListener('mousedown', (event) => event.preventDefault());
+    button.addEventListener('click', run);
+    bar.append(button);
+    return button;
+  };
+  tool('A+', 'Make the highlighted words bigger', () => wrapSelection({ fontSize: '1.25em' }));
+  tool('A-', 'Make the highlighted words smaller', () => wrapSelection({ fontSize: '0.8em' }));
+  tool('B', 'Bold', () => wrapSelection({ fontWeight: '700' })).classList.add('bold');
+  tool('I', 'Italic', () => wrapSelection({ fontStyle: 'italic' })).classList.add('italic');
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.value = '#c8102e';
+  color.title = 'Color for the highlighted words';
+  color.setAttribute('aria-label', 'Color for the highlighted words');
+  let saved = null;
+  color.addEventListener('mousedown', () => {
+    const selection = window.getSelection();
+    saved = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+  });
+  color.addEventListener('input', () => {
+    if (saved) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(saved);
+    }
+    if (wrapSelection({ color: color.value })) {
+      const selection = window.getSelection();
+      saved = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    }
+  });
+  bar.append(color);
+  tool('Clear', 'Remove styling from the highlighted words', () => {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount || selection.getRangeAt(0).collapsed) {
+      box.innerHTML = textToRich(richToText(sanitizeRich(box.innerHTML)));
+      commit();
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const text = range.toString();
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    commit();
+  });
+  wrap.append(bar, box, hint);
+  return wrap;
+}
+
 function textInput(value, apply, placeholder) {
   const input = document.createElement('input');
   input.type = 'text';
@@ -957,7 +1069,7 @@ function buildInspector() {
   inspector.append(pieceToolbar(widget));
 
   if (widget.type === 'welcome') {
-    inspector.append(field('Words', areaInput(settings.text, (value) => { settings.text = value; })));
+    inspector.append(richField('Words', settings, 'text', { multiline: false }));
     inspector.append(field('How it moves', selectInput(settings.mode, [['static', 'Still'], ['scroll', 'Scrolling']], (value) => { settings.mode = value; })));
   }
   if (widget.type === 'date') {
@@ -1021,8 +1133,8 @@ function buildInspector() {
   }
   if (widget.type === 'text') {
     inspector.append(field('Small heading', textInput(settings.eyebrow, (value) => { settings.eyebrow = value; })));
-    inspector.append(field('Main line', textInput(settings.title, (value) => { settings.title = value; })));
-    inspector.append(field('Note', areaInput(settings.body, (value) => { settings.body = value; })));
+    inspector.append(richField('Main line', settings, 'title', { multiline: false }));
+    inspector.append(richField('Note', settings, 'body'));
   }
   if (widget.type === 'events') buildEventsForm(settings, inspector, () => refreshWidget(widget.id));
   if (widget.type === 'photos') buildPhotosForm(settings);
@@ -2029,12 +2141,12 @@ function buildWeekForm() {
       const card = el('div', 'week-card');
       card.append(el('span', 'tool-label', specOf(widget.type).label));
       if (widget.type === 'welcome') {
-        card.append(areaInput(settings.text, (value) => { settings.text = value; refresh(); }));
+        card.append(richField('Words', settings, 'text', { multiline: false, refresh }));
       }
       if (widget.type === 'text') {
         card.append(field('Small heading', textInput(settings.eyebrow, (value) => { settings.eyebrow = value; refresh(); })));
-        card.append(field('Main line', textInput(settings.title, (value) => { settings.title = value; refresh(); })));
-        card.append(field('Note', areaInput(settings.body, (value) => { settings.body = value; refresh(); })));
+        card.append(richField('Main line', settings, 'title', { multiline: false, refresh }));
+        card.append(richField('Note', settings, 'body', { refresh }));
         card.append(dateRangeBlock(widget, () => { if (findWidget(widget.id)) renderCanvas(); }));
       }
       if (widget.type === 'events') buildEventsForm(settings, card, refresh);
@@ -2105,6 +2217,250 @@ function buildTemplatesForm() {
     card.append(row);
     inspector.append(card);
   });
+}
+
+// Friendly names for every line of text a piece can show.
+const LINE_LABELS = {
+  eyebrow: 'Small heading',
+  clock: 'Clock',
+  weekday: 'Day of the week',
+  civil: 'English date',
+  'date-he': 'Hebrew date',
+  translit: 'Hebrew date in English letters',
+  'parsha-en': 'Parsha',
+  'parsha-he': 'Parsha in Hebrew',
+  'time-label': 'Candle lighting and havdalah labels',
+  'time-value': 'Candle lighting and havdalah times',
+  'time-when': 'Day and date under each time',
+  'logo-name': 'Name',
+  'logo-sub': 'Line under the name',
+  'welcome-line': 'Welcome words',
+  'welcome-chunk': 'Welcome words',
+  'event-title': 'Event names',
+  'event-meta': 'Event time and details',
+  'event-dow': 'Day of the week',
+  'event-day': 'Date number',
+  'event-month': 'Month',
+  'text-title': 'Main line',
+  'text-body': 'Note',
+  'zman-he': 'Hebrew heading',
+  'zman-note': 'After-sunset note',
+  'zman-label': 'Zmanim names',
+  'zman-time': 'Zmanim times',
+  caption: 'Caption',
+  'title-fit': 'Main message',
+  'takeover-sub': 'Second line',
+  'takeover-details': 'Details',
+  'takeover-foot': 'Footer',
+};
+
+const TAKEOVER_LINES = ['eyebrow', 'title-fit', 'takeover-sub', 'takeover-details', 'takeover-foot'];
+
+function lineLabel(key) {
+  return LINE_LABELS[key] || key.replace(/-/g, ' ');
+}
+
+// The lines a piece is showing right now, in screen order.
+function linesShown(target) {
+  if (target === tv().takeover) return TAKEOVER_LINES.filter((key) => key === 'title-fit' || target[{ eyebrow: 'eyebrow', 'takeover-sub': 'subtitle', 'takeover-details': 'details', 'takeover-foot': 'footer' }[key]]);
+  const shell = selectedId ? canvas.querySelector(`.widget[data-id="${selectedId}"]`) : null;
+  const keys = [];
+  shell?.querySelectorAll('[data-line]').forEach((node) => {
+    if (!keys.includes(node.dataset.line)) keys.push(node.dataset.line);
+  });
+  return keys;
+}
+
+function lineStyle(target, key) {
+  return target.type?.lines?.[key] || {};
+}
+
+function changeLine(target, key, patch, refresh) {
+  setLine(target, key, patch);
+  markDirty();
+  return Promise.resolve(refresh()).then(() => {
+    if (lineBar?.key === key) showLineBar(target, key, lineBar.widgetId);
+  });
+}
+
+function buildLinesSection(target, refresh) {
+  const box = el('div', 'lines-section');
+  box.append(el('h3', 'week-title', 'Each line of text'));
+  box.append(el('p', 'note', 'Tip: double-click any text on the screen to change just that line, right there.'));
+  const list = el('div', 'line-list');
+  box.append(list);
+  const fill = () => {
+    const keys = linesShown(target);
+    list.replaceChildren();
+    if (!keys.length) {
+      list.append(el('p', 'note', 'This piece has no text showing right now.'));
+      return false;
+    }
+    keys.forEach((key) => list.append(lineRow(target, key, refresh)));
+    return true;
+  };
+  // The preview may still be drawing; try again shortly if nothing is there yet.
+  if (!fill()) setTimeout(fill, 400);
+  return box;
+}
+
+function lineRow(target, key, refresh) {
+  const style = lineStyle(target, key);
+  const row = el('div', `line-row${lineBar?.key === key ? ' picked' : ''}`);
+  const head = el('div', 'line-head');
+  const name = el('button', 'line-name', lineLabel(key));
+  name.type = 'button';
+  name.title = 'Show this line on the screen';
+  name.addEventListener('click', () => {
+    if (target === tv().takeover) return;
+    showLineBar(target, key, selectedId);
+  });
+  const size = Number(style.size) || 100;
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = '40';
+  range.max = '250';
+  range.step = '5';
+  range.value = String(size);
+  range.setAttribute('aria-label', `${lineLabel(key)} size`);
+  const value = el('span', 'line-size', `${size}%`);
+  range.addEventListener('input', () => {
+    value.textContent = `${range.value}%`;
+    changeLine(target, key, { size: Number(range.value) }, refresh);
+  });
+  const bold = el('button', `line-toggle${Number(style.weight) >= 650 ? ' on' : ''}`, 'B');
+  bold.type = 'button';
+  bold.title = 'Bold';
+  bold.addEventListener('click', () => {
+    changeLine(target, key, { weight: Number(style.weight) >= 650 ? '' : '700' }, refresh).then(() => buildInspector());
+  });
+  head.append(name, range, value, bold);
+  row.append(head);
+
+  const more = document.createElement('details');
+  more.className = 'line-more';
+  more.open = openTypeParts.has(`line:${key}`);
+  more.addEventListener('toggle', () => {
+    if (more.open) openTypeParts.add(`line:${key}`);
+    else openTypeParts.delete(`line:${key}`);
+  });
+  const moreTitle = document.createElement('summary');
+  moreTitle.textContent = 'More';
+  more.append(moreTitle);
+  const used = extraFontsUsed(tv(), { target, line: key });
+  const full = used.size >= MAX_EXTRA_FONTS;
+  const fonts = TEXT_FONTS.map((item) => [item.id, item.id !== 'theme' && full && !used.has(item.id) ? `${item.label} - limit reached` : item.label, item.id !== 'theme' && full && !used.has(item.id)]);
+  more.append(field('Font', selectInput(canonicalFont(style.font) || 'theme', fonts, (v) => {
+    changeLine(target, key, { font: v === 'theme' ? '' : v }, refresh);
+  })));
+  more.append(checkInput(Boolean(style.italic), 'Italic', (v) => changeLine(target, key, { italic: v }, refresh)));
+  const colorRow = el('div', 'color-row');
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.value = style.color || '#241c16';
+  color.setAttribute('aria-label', `${lineLabel(key)} color`);
+  color.addEventListener('input', () => changeLine(target, key, { color: color.value }, refresh));
+  const clearColor = el('button', 'btn', 'Theme color');
+  clearColor.type = 'button';
+  clearColor.addEventListener('click', () => changeLine(target, key, { color: '' }, refresh).then(() => buildInspector()));
+  colorRow.append(color, clearColor);
+  more.append(field('Color', colorRow));
+  more.append(choiceRow('Alignment', style.align || '', [['', 'Theme'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']], (v) => changeLine(target, key, { align: v }, refresh)));
+  more.append(sliderRow('Line spacing', style.line, { min: 0.8, max: 2.5, step: 0.05, unit: 'x' }, (v) => changeLine(target, key, { line: v }, refresh)));
+  more.append(sliderRow('Letter spacing', style.track, { min: -0.05, max: 0.4, step: 0.01, unit: 'em' }, (v) => changeLine(target, key, { track: v }, refresh)));
+  if (key === 'text-body') more.append(sliderRow('Space between paragraphs', style.para, { min: 0, max: 2, step: 0.05, unit: 'em' }, (v) => changeLine(target, key, { para: v }, refresh)));
+  more.append(field('Case', selectInput(style.case || '', [['', 'Normal'], ['upper', 'Uppercase']], (v) => changeLine(target, key, { case: v }, refresh))));
+  const resetLine = el('button', 'btn btn-quiet', 'Reset this line');
+  resetLine.type = 'button';
+  resetLine.addEventListener('click', () => {
+    if (target.type?.lines) delete target.type.lines[key];
+    changeLine(target, key, {}, refresh).then(() => buildInspector());
+  });
+  more.append(resetLine);
+  row.append(more);
+  return row;
+}
+
+// The small toolbar that appears on the screen when a line is double-clicked.
+let lineBar = null;
+
+function hideLineBar() {
+  document.querySelector('.line-bar')?.remove();
+  canvas.querySelectorAll('.line-picked').forEach((node) => node.classList.remove('line-picked'));
+  lineBar = null;
+}
+
+function showLineBar(target, key, widgetId) {
+  document.querySelector('.line-bar')?.remove();
+  canvas.querySelectorAll('.line-picked').forEach((node) => node.classList.remove('line-picked'));
+  const shell = canvas.querySelector(`.widget[data-id="${widgetId}"]`);
+  const nodes = shell ? [...shell.querySelectorAll(`[data-line="${key}"]`)] : [];
+  if (!nodes.length) {
+    lineBar = null;
+    return;
+  }
+  lineBar = { target, key, widgetId };
+  nodes.forEach((node) => node.classList.add('line-picked'));
+  const style = lineStyle(target, key);
+  const refresh = () => refreshWidget(widgetId);
+  const set = (patch) => changeLine(target, key, patch, refresh).then(() => {
+    if (mode === 'widget' && selectedId === widgetId) buildInspector();
+  });
+  const bar = el('div', 'line-bar');
+  bar.addEventListener('pointerdown', (event) => event.stopPropagation());
+  bar.append(el('strong', 'line-bar-name', lineLabel(key)));
+  const size = Number(style.size) || 100;
+  const button = (text, title, run, on = false) => {
+    const b = el('button', `line-bar-btn${on ? ' on' : ''}`, text);
+    b.type = 'button';
+    b.title = title;
+    b.setAttribute('aria-label', title);
+    b.addEventListener('click', run);
+    bar.append(b);
+    return b;
+  };
+  button('A-', 'Smaller', () => set({ size: Math.max(40, size - 10) }));
+  bar.append(el('span', 'line-bar-size', `${size}%`));
+  button('A+', 'Bigger', () => set({ size: Math.min(250, size + 10) }));
+  button('B', 'Bold', () => set({ weight: Number(style.weight) >= 650 ? '' : '700' }), Number(style.weight) >= 650).classList.add('bold');
+  button('I', 'Italic', () => set({ italic: !style.italic }), Boolean(style.italic)).classList.add('italic');
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.value = style.color || '#ffffff';
+  color.title = 'Color';
+  color.setAttribute('aria-label', 'Color');
+  color.addEventListener('change', () => set({ color: color.value }));
+  bar.append(color);
+  button('L', 'Align left', () => set({ align: style.align === 'left' ? '' : 'left' }), style.align === 'left');
+  button('C', 'Align center', () => set({ align: style.align === 'center' ? '' : 'center' }), style.align === 'center');
+  button('R', 'Align right', () => set({ align: style.align === 'right' ? '' : 'right' }), style.align === 'right');
+  const used = extraFontsUsed(tv(), { target, line: key });
+  const full = used.size >= MAX_EXTRA_FONTS;
+  const font = document.createElement('select');
+  font.title = 'Font';
+  font.setAttribute('aria-label', 'Font');
+  TEXT_FONTS.forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = item.id === 'theme' ? 'Theme font' : item.label;
+    option.disabled = item.id !== 'theme' && full && !used.has(item.id) && item.id !== canonicalFont(style.font);
+    option.selected = item.id === (canonicalFont(style.font) || 'theme');
+    font.append(option);
+  });
+  font.addEventListener('change', () => set({ font: font.value === 'theme' ? '' : font.value }));
+  bar.append(font);
+  button('Reset', 'Put this line back to the theme', () => {
+    if (target.type?.lines) delete target.type.lines[key];
+    set({});
+  });
+  button('x', 'Close', () => hideLineBar());
+  document.body.append(bar);
+  const rect = nodes[0].getBoundingClientRect();
+  const barRect = bar.getBoundingClientRect();
+  const top = rect.top - barRect.height - 8 > 8 ? rect.top - barRect.height - 8 : rect.bottom + 8;
+  const left = Math.min(window.innerWidth - barRect.width - 8, Math.max(8, rect.left));
+  bar.style.top = `${top + window.scrollY}px`;
+  bar.style.left = `${left}px`;
 }
 
 // Which Text style sections are open, so a rebuild keeps the person where they were.
@@ -2184,8 +2540,15 @@ function appendTypePanel(target, parts, refresh, fits = true, title = 'Text styl
     });
     box.append(fitRow);
   } else {
-    box.append(el('p', 'hint', 'These sizes follow the size of the box. Make the box bigger or smaller, or use Text size to adjust one part.'));
+    box.append(el('p', 'hint', 'Sizes follow the size of the box. Make the box bigger or smaller, or change each line below.'));
   }
+  box.append(buildLinesSection(target, refresh));
+  const advanced = document.createElement('details');
+  advanced.className = 'type-advanced';
+  const advancedTitle = document.createElement('summary');
+  advancedTitle.textContent = 'Advanced: style groups of lines together';
+  advanced.append(advancedTitle, el('p', 'note', 'Each group covers several lines at once. A setting on a single line above wins over its group.'));
+  box.append(advanced);
   parts.forEach((part) => {
     const details = document.createElement('details');
     details.className = 'type-part';
@@ -2255,11 +2618,12 @@ function appendTypePanel(target, parts, refresh, fits = true, title = 'Text styl
     }
     details.append(sliderRow('Letter spacing', style.track, { min: -0.05, max: 0.4, step: 0.01, unit: 'em' }, (value) => change(part.id, { track: value })));
     details.append(field('Case', selectInput(style.case || '', [['', 'Normal'], ['upper', 'Uppercase']], (value) => change(part.id, { case: value }))));
-    box.append(details);
+    advanced.append(details);
   });
   const reset = el('button', 'btn', 'Reset all text to the theme');
   reset.type = 'button';
   reset.addEventListener('click', () => {
+    hideLineBar();
     delete target.type;
     markDirty();
     refresh();
@@ -2351,8 +2715,8 @@ function buildTakeoverForm() {
     inspector.append(el('p', 'note', 'Tip: a flyer made for a TV is 1920 by 1080 pixels (or 1080 by 1920 on a tall screen), so it fills the screen exactly.'));
   } else {
     inspector.append(field('Small line', textInput(takeover.eyebrow, (value) => { takeover.eyebrow = value; redraw(); })));
-    inspector.append(field('Main message', areaInput(takeover.title, (value) => { takeover.title = value; redraw(); })));
-    inspector.append(field('Second line', textInput(takeover.subtitle, (value) => { takeover.subtitle = value; redraw(); })));
+    inspector.append(richField('Main message', takeover, 'title', { refresh: redraw }));
+    inspector.append(richField('Second line', takeover, 'subtitle', { multiline: false, refresh: redraw }));
     inspector.append(field('Details', textInput(takeover.details, (value) => { takeover.details = value; redraw(); })));
     inspector.append(field('Footer', textInput(takeover.footer, (value) => { takeover.footer = value; redraw(); })));
     const templates = el('div', 'ground-row');
@@ -2959,6 +3323,11 @@ function bindChrome() {
       duplicateWidget(selectedId);
       return;
     }
+    if (event.key === 'Escape' && lineBar) {
+      hideLineBar();
+      buildInspector();
+      return;
+    }
     if (event.key === 'Escape' && mode === 'takeover') {
       leaveFullScreen();
       return;
@@ -3004,7 +3373,27 @@ function bindChrome() {
     event.preventDefault();
     event.returnValue = '';
   });
+  canvas.addEventListener('dblclick', (event) => {
+    if (previewTakeover) return;
+    const shell = event.target.closest('.widget');
+    const widget = shell ? findWidget(shell.dataset.id) : null;
+    if (!widget) return;
+    const body = shell.querySelector('.widget-body');
+    body.style.pointerEvents = 'auto';
+    const hit = document.elementFromPoint(event.clientX, event.clientY);
+    body.style.pointerEvents = '';
+    const line = hit?.closest?.('[data-line]');
+    if (!line || !shell.contains(line)) return;
+    selectedId = widget.id;
+    multi.clear();
+    mode = 'widget';
+    paintSelection();
+    buildInspector();
+    showLineBar(widget.settings, line.dataset.line, widget.id);
+    buildInspector();
+  });
   canvas.addEventListener('pointerdown', (event) => {
+    if (lineBar && !event.target.closest(`.widget[data-id="${lineBar.widgetId}"]`)) hideLineBar();
     if (previewTakeover && !event.target.closest('.preview-bar')) {
       leaveFullScreen();
       return;
