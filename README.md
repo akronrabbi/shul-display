@@ -64,6 +64,10 @@ A new screen (from + Screen, a ready layout, or a saved layout) starts as a **Dr
 
 Past events stay in the editor list and disappear from the TV once their date and time have passed. A date with no time stays up through that day.
 
+### On a phone
+
+The top bar is one row (logo, undo, redo, More, Save); This week and Ready layouts are in More. The sign-in is one line, and the TV's name, rotation, and address are behind **TV settings**. Tap a piece to open its settings: the preview stays at the top of the screen while the settings scroll below it, so every change can be seen as it is made. Double-tap a line of text on the preview to open the text toolbar, which sits just under the preview (swipe it for more buttons). **Move** and **Size** buttons in each piece's settings nudge it without dragging. Buttons are sized for a finger, and typing boxes do not make the phone zoom in.
+
 ## Shabbos times and the Hebrew date
 
 Times are calculated on the TV itself with [Hebcal](https://github.com/hebcal/hebcal-es6) (`@hebcal/core`), for Akron (geonameid 5145476, 41.08144, -81.51901, America/New_York). Candle lighting is 18 minutes before sunset. Havdalah defaults to nightfall at 8.5 degrees, which is what [hebcal.com](https://www.hebcal.com/shabbat?geonameid=5145476&b=18&M=on) publishes. The editor can switch havdalah to 42, 50, or 72 minutes after sunset.

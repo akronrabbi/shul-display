@@ -473,6 +473,34 @@ function toggleMulti(id) {
   buildInspector();
 }
 
+// Finds the line of text under a point in a piece and opens its toolbar.
+function pickLineAt(shell, x, y) {
+  const widget = shell ? findWidget(shell.dataset.id) : null;
+  if (!widget) return false;
+  const body = shell.querySelector('.widget-body');
+  body.style.pointerEvents = 'auto';
+  const hit = document.elementFromPoint(x, y);
+  body.style.pointerEvents = '';
+  const line = hit?.closest?.('[data-line]');
+  if (!line || !shell.contains(line)) return false;
+  const key = line.dataset.line;
+  selectedId = widget.id;
+  multi.clear();
+  mode = 'widget';
+  paintSelection();
+  buildInspector();
+  // Wait for a phone's panel to open and the preview to settle, then place the toolbar.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    showLineBar(widget.settings, key, widget.id);
+    buildInspector();
+  }));
+  return true;
+}
+
+// A double tap on a phone does what a double-click does on a computer.
+let lastTap = { id: '', at: 0, x: 0, y: 0 };
+let tapTimer = 0;
+
 function wireShellDrop(shell, widget) {
   if (widget.type !== 'photos') return;
   const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes('Files');
@@ -560,7 +588,20 @@ function wireShell(shell, widget) {
       showGuides([]);
       widget.place[orientation] = snapPlace(widget.place[orientation]);
       applyPlace(shell, widget.place[orientation]);
-      markDirty();
+      if (dragged) markDirty();
+      if (!dragged && event.pointerType !== 'mouse') {
+        const now = Date.now();
+        const again = lastTap.id === widget.id && now - lastTap.at < 380 && Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) < 30;
+        lastTap = { id: widget.id, at: now, x: event.clientX, y: event.clientY };
+        clearTimeout(tapTimer);
+        if (again) {
+          lastTap.at = 0;
+          if (pickLineAt(shell, event.clientX, event.clientY)) return;
+        }
+        // Wait a moment before opening the panel, so a second tap lands on the same spot.
+        if (isPhone()) tapTimer = setTimeout(() => buildInspector(), 330);
+        return;
+      }
       if (isPhone() && !dragged) buildInspector();
     };
     shell.addEventListener('pointermove', move);
@@ -674,7 +715,17 @@ function isPhone() {
 
 function syncSheet() {
   const open = isPhone() && (Boolean(selectedId) || ['takeover', 'theme', 'layouts', 'history', 'week', 'templates', 'multi'].includes(mode) || document.body.dataset.sheet === 'screen');
+  const changed = document.body.classList.contains('sheet-open') !== open;
   document.body.classList.toggle('sheet-open', open);
+  // On a phone the preview stays at the top while a panel is open below it,
+  // so changes can be seen as they are made.
+  if (changed) {
+    fitCanvas();
+    requestAnimationFrame(() => {
+      const board = document.querySelector('.board');
+      document.body.style.setProperty('--peek-h', `${Math.ceil(board.getBoundingClientRect().height)}px`);
+    });
+  }
   const title = document.getElementById('sheet-title');
   if (!title) return;
   if (mode === 'theme') title.textContent = 'Theme';
@@ -695,6 +746,13 @@ function fitCanvas() {
   const ratio = tv().orientation === 'portrait' ? 9 / 16 : 16 / 9;
   let width = frame.clientWidth || 320;
   let height = width / ratio;
+  if (isPhone() && document.body.classList.contains('sheet-open')) {
+    const limit = Math.max(140, window.innerHeight * 0.36);
+    if (height > limit) {
+      height = limit;
+      width = height * ratio;
+    }
+  }
   if (!isPhone() && frame.clientHeight > 80 && height > frame.clientHeight) {
     height = frame.clientHeight;
     width = height * ratio;
@@ -1067,6 +1125,7 @@ function buildInspector() {
   inspector.append(el('h2', 'side-title', meta.label));
   inspector.append(el('p', 'hint', 'Change it here. The screen updates as you type. Save when you want the TV to follow.'));
   inspector.append(pieceToolbar(widget));
+  inspector.append(nudgePad(widget));
 
   if (widget.type === 'welcome') {
     inspector.append(richField('Words', settings, 'text', { multiline: false }));
@@ -1235,6 +1294,53 @@ function buildShabbosArrangement(widget) {
   box.append(checkInput(arrange.showWhen !== false, 'Show the day and date under each time', (v) => set('showWhen', v ? '' : false)));
   box.append(el('p', 'note', 'Spread out keeps the parsha at the top and the times at the bottom. Top, Middle, and Bottom keep them together, with the space you set.'));
   inspector.append(box);
+}
+
+// Small steps without dragging: handy on a phone, where a finger is not precise.
+function nudgePad(widget) {
+  const box = el('div', 'nudge');
+  const orientation = tv().orientation;
+  const apply = (change) => {
+    if (widget.locked) {
+      setStatus('That piece is locked. Unlock it first.');
+      return;
+    }
+    const place = { ...widget.place[orientation] };
+    change(place);
+    widget.place[orientation] = snapPlace(place);
+    const shell = canvas.querySelector(`[data-id="${widget.id}"]`);
+    if (shell) applyPlace(shell, widget.place[orientation]);
+    markDirty();
+  };
+  const step = 1;
+  const make = (text, label, change) => {
+    const b = el('button', 'nudge-btn', text);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => apply(change));
+    return b;
+  };
+  const move = el('div', 'nudge-group');
+  move.append(el('span', 'tool-label', 'Move'));
+  const arrows = el('div', 'nudge-row');
+  arrows.append(
+    make('\u2190', 'Move left', (p) => { p.x -= step; }),
+    make('\u2191', 'Move up', (p) => { p.y -= step; }),
+    make('\u2193', 'Move down', (p) => { p.y += step; }),
+    make('\u2192', 'Move right', (p) => { p.x += step; }),
+  );
+  move.append(arrows);
+  const size = el('div', 'nudge-group');
+  size.append(el('span', 'tool-label', 'Size'));
+  const sizes = el('div', 'nudge-row');
+  sizes.append(
+    make('\u2212', 'Smaller', (p) => { p.w -= 2; p.h -= 2; p.x += 1; p.y += 1; }),
+    make('+', 'Bigger', (p) => { p.w += 2; p.h += 2; p.x -= 1; p.y -= 1; }),
+  );
+  size.append(sizes);
+  box.append(move, size);
+  return box;
 }
 
 function pieceToolbar(widget) {
@@ -2386,12 +2492,14 @@ let lineBar = null;
 
 function hideLineBar() {
   document.querySelector('.line-bar')?.remove();
+  canvas.querySelectorAll('.editing-text').forEach((node) => node.classList.remove('editing-text'));
   canvas.querySelectorAll('.line-picked').forEach((node) => node.classList.remove('line-picked'));
   lineBar = null;
 }
 
 function showLineBar(target, key, widgetId) {
   document.querySelector('.line-bar')?.remove();
+  canvas.querySelectorAll('.editing-text').forEach((node) => node.classList.remove('editing-text'));
   canvas.querySelectorAll('.line-picked').forEach((node) => node.classList.remove('line-picked'));
   const shell = canvas.querySelector(`.widget[data-id="${widgetId}"]`);
   const nodes = shell ? [...shell.querySelectorAll(`[data-line="${key}"]`)] : [];
@@ -2455,11 +2563,18 @@ function showLineBar(target, key, widgetId) {
   });
   button('x', 'Close', () => hideLineBar());
   document.body.append(bar);
+  shell.classList.add('editing-text');
+  if (isPhone() && document.body.classList.contains('sheet-open')) {
+    // On a phone the toolbar sits right under the preview, so the line stays in view.
+    bar.classList.add('docked');
+    bar.style.top = `${document.querySelector('.board').getBoundingClientRect().bottom}px`;
+    return;
+  }
   const rect = nodes[0].getBoundingClientRect();
   const barRect = bar.getBoundingClientRect();
   const top = rect.top - barRect.height - 8 > 8 ? rect.top - barRect.height - 8 : rect.bottom + 8;
   const left = Math.min(window.innerWidth - barRect.width - 8, Math.max(8, rect.left));
-  bar.style.top = `${top + window.scrollY}px`;
+  bar.style.top = `${top}px`;
   bar.style.left = `${left}px`;
 }
 
@@ -2650,7 +2765,7 @@ function buildTakeoverForm() {
   const redraw = () => { if (previewTakeover) renderCanvas(); };
   const isImage = takeover.kind === 'image';
   inspector.append(el('h2', 'side-title', 'Full screen'));
-  inspector.append(el('p', 'hint', 'Covers the whole screen of the TV you are editing, for example a simcha in the social hall. The screen on the left shows what it will look like.'));
+  inspector.append(el('p', 'hint', 'Covers the whole screen of the TV you are editing, for example a simcha in the social hall. The preview shows what it will look like.'));
   const enabled = checkInput(takeover.enabled, 'Show it on this TV', (value) => { takeover.enabled = value; redraw(); });
   enabled.classList.add('big-check');
   inspector.append(enabled);
@@ -3237,6 +3352,13 @@ function bindChrome() {
   });
   document.getElementById('week').addEventListener('click', () => openMode('week'));
   document.getElementById('templates').addEventListener('click', () => openMode('templates'));
+  document.getElementById('week-m').addEventListener('click', () => openMode('week'));
+  document.getElementById('templates-m').addEventListener('click', () => openMode('templates'));
+  document.getElementById('tv-more').addEventListener('click', (event) => {
+    const open = document.body.classList.toggle('tv-open');
+    event.currentTarget.setAttribute('aria-expanded', open ? 'true' : 'false');
+    event.currentTarget.textContent = open ? 'Hide TV settings' : 'TV settings';
+  });
   document.getElementById('undo').addEventListener('click', undo);
   document.getElementById('redo').addEventListener('click', redo);
   document.getElementById('layouts').addEventListener('click', () => openArchive('layouts'));
@@ -3376,21 +3498,7 @@ function bindChrome() {
   canvas.addEventListener('dblclick', (event) => {
     if (previewTakeover) return;
     const shell = event.target.closest('.widget');
-    const widget = shell ? findWidget(shell.dataset.id) : null;
-    if (!widget) return;
-    const body = shell.querySelector('.widget-body');
-    body.style.pointerEvents = 'auto';
-    const hit = document.elementFromPoint(event.clientX, event.clientY);
-    body.style.pointerEvents = '';
-    const line = hit?.closest?.('[data-line]');
-    if (!line || !shell.contains(line)) return;
-    selectedId = widget.id;
-    multi.clear();
-    mode = 'widget';
-    paintSelection();
-    buildInspector();
-    showLineBar(widget.settings, line.dataset.line, widget.id);
-    buildInspector();
+    if (shell) pickLineAt(shell, event.clientX, event.clientY);
   });
   canvas.addEventListener('pointerdown', (event) => {
     if (lineBar && !event.target.closest(`.widget[data-id="${lineBar.widgetId}"]`)) hideLineBar();
