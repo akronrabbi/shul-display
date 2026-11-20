@@ -48,14 +48,14 @@
   overflow: hidden;
 }
 
-[data-logo="plate"] .tone-clear .logo-img {
+[data-logo="plate"] .tone-clear .logo-img:not(.shul-mark) {
   background: #f7f4ee;
   padding: 3%;
   box-sizing: border-box;
 }
 
 /* On the modern looks the backing hugs the mark as a rounded tile. */
-:is([data-cards="glass"], [data-cards="line"])[data-logo="plate"] .tone-clear .logo-img {
+:is([data-cards="glass"], [data-cards="line"])[data-logo="plate"] .tone-clear .logo-img:not(.shul-mark) {
   width: auto;
   max-width: 100%;
   aspect-ratio: 1 / 1;

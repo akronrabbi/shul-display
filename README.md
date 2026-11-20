@@ -80,7 +80,7 @@ A Google Photos album cannot be linked so that it updates on its own. Google rem
 
 ## Logo
 
-The default mark is the Anshe Sfard logo from [akronshul.com](https://akronshul.com), with the white background removed so it sits on the navy screen. You can upload a different picture.
+The default mark is the Anshe Sfard logo, with the name under the menorah (`assets/akron-shul-logo.png`). A white version (`assets/akron-shul-logo-light.png`) is used on its own wherever the background is dark, so it shows on every theme and card color. Because the logo already says Anshe Sfard, the piece does not repeat that name; the line under it (Revere Road) still shows. You can upload a different picture.
 
 ## Publishing a layout
 
