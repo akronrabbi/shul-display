@@ -9,7 +9,7 @@ import { explainDriveError, listDriveFolderImages } from './drive.js';
 import { inDateRange, isCurrentEvent } from './events.js';
 import { readTvStatus } from './cloud.js';
 import { TEMPLATES, applyTemplate } from './templates.js';
-import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosAccount, photosConnected, pickPhotos } from './gphotos.js';
+import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosAccount, photosConnected, photosRemembered, pickPhotos } from './gphotos.js';
 import {
   PHOTO_TRANSITIONS,
   WIDGET_TYPES,
@@ -1277,6 +1277,7 @@ function buildEventsForm(settings, host = inspector, refresh = () => refreshWidg
 function buildPhotosForm(settings) {
   inspector.append(el('p', 'note', PHOTOS_HELP));
   buildGooglePhotos(settings);
+  buildLibrary(settings);
   const list = el('div');
   settings.images.forEach((image, index) => {
     const row = el('div', 'thumb');
@@ -1313,9 +1314,11 @@ function buildPhotosForm(settings) {
       const uploaded = await storeFile(file);
       if (!uploaded) continue;
       settings.images.push({ url: uploaded.url, name: file.name });
+      addToLibrary({ url: uploaded.url, name: file.name, from: 'upload' });
     }
     upload.value = '';
     markDirty();
+    saveLibraryNow();
     refreshWidget(selectedId);
     buildInspector();
   });
@@ -1398,6 +1401,85 @@ function buildPhotosForm(settings) {
 
 let editingClientId = false;
 
+function addToLibrary(entry) {
+  if (!Array.isArray(state.library)) state.library = [];
+  if (!entry?.url || state.library.some((item) => item.url === entry.url)) return;
+  state.library.push({ ...entry, at: new Date().toISOString() });
+}
+
+// Keep the library online right away, without sending any other unsaved
+// changes to the TV: it is written onto the board as it was last saved.
+async function saveLibraryNow() {
+  try {
+    const base = JSON.parse(savedJson);
+    base.library = state.library || [];
+    const next = normalize(base);
+    const result = await storage.saveOnline(next, { history: false });
+    if (!result.ok) return false;
+    savedJson = JSON.stringify(next);
+    markDirty();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildLibrary(settings) {
+  const library = state.library || [];
+  const box = el('div', 'gphotos photo-library');
+  box.append(el('strong', '', `Photo library (${library.length})`));
+  if (!library.length) {
+    box.append(el('p', 'note', 'Every picture you upload or copy from Google Photos is kept here, so you can use it again on any screen or TV.'));
+    inspector.append(box);
+    return;
+  }
+  box.append(el('p', 'note', 'Tap a picture to add it to this slideshow. A check means it is already in it.'));
+  const inUse = new Set(settings.images.map((image) => image.url));
+  const grid = el('div', 'library-grid');
+  [...library].reverse().forEach((item) => {
+    const tile = el('div', `library-tile${inUse.has(item.url) ? ' used' : ''}`);
+    const pick = el('button', 'library-pick');
+    pick.type = 'button';
+    pick.title = inUse.has(item.url) ? 'Already in this slideshow' : 'Add to this slideshow';
+    const img = document.createElement('img');
+    img.alt = item.name || '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.src = item.url;
+    pick.append(img);
+    pick.addEventListener('click', () => {
+      if (inUse.has(item.url)) return;
+      settings.images.push({ url: item.url, name: item.name });
+      markDirty();
+      refreshWidget(selectedId);
+      buildInspector();
+    });
+    const drop = el('button', 'library-drop', 'x');
+    drop.type = 'button';
+    drop.title = 'Remove from the library (slideshows keep it)';
+    drop.setAttribute('aria-label', 'Remove from the library');
+    drop.addEventListener('click', async () => {
+      state.library = (state.library || []).filter((entry) => entry.url !== item.url);
+      markDirty();
+      buildInspector();
+      await saveLibraryNow();
+    });
+    tile.append(pick, drop);
+    grid.append(tile);
+  });
+  box.append(grid);
+  const unused = library.filter((item) => !inUse.has(item.url));
+  if (unused.length) {
+    box.append(actionButton(`Add all ${unused.length} to this slideshow`, () => {
+      unused.forEach((item) => settings.images.push({ url: item.url, name: item.name }));
+      markDirty();
+      refreshWidget(selectedId);
+      buildInspector();
+    }));
+  }
+  inspector.append(box);
+}
+
 function googleSettings() {
   if (!state.google) state.google = { photosClientId: '' };
   return state.google;
@@ -1424,13 +1506,21 @@ function buildGooglePhotos(settings) {
     });
     box.append(field('Google client ID (one-time setup)', id), keep);
   } else {
-    const run = actionButton(photosConnected() ? 'Choose photos from Google Photos' : 'Connect Google Photos', async () => {
+    const run = actionButton(photosRemembered() ? 'Choose photos from Google Photos' : 'Connect Google Photos', async () => {
       run.disabled = true;
       try {
         if (!photosConnected()) {
-          message.textContent = 'Opening Google. Choose the Google account that has the photos.';
+          // Google's pass lasts an hour. With a remembered account this renews it
+          // without asking which account. Google's window may flash and close.
+          const quiet = photosRemembered();
+          message.textContent = quiet ? 'Renewing the Google connection...' : 'Opening Google. Choose the Google account that has the photos.';
           await connectPhotos(google.photosClientId);
-          buildInspector();
+          if (quiet) {
+            message.textContent = 'Connection renewed. Press Open Google Photos.';
+            run.textContent = 'Open Google Photos';
+          } else {
+            buildInspector();
+          }
           return;
         }
         message.textContent = 'Opening Google Photos...';
@@ -1458,6 +1548,7 @@ function buildGooglePhotos(settings) {
               continue;
             }
             settings.images.push({ url: uploaded.url, name: file.name, from: 'google-photos' });
+            addToLibrary({ url: uploaded.url, name: file.name, from: 'google-photos' });
             added += 1;
           } catch {
             failed += 1;
@@ -1466,7 +1557,8 @@ function buildGooglePhotos(settings) {
         endPickSession(picked.sessionId);
         markDirty();
         refreshWidget(selectedId);
-        const summary = `Added ${added} photo${added === 1 ? '' : 's'} from Google Photos.${failed ? ` ${failed} could not be copied.` : ''} Press Save for the TV.`;
+        const kept = await saveLibraryNow();
+        const summary = `Added ${added} photo${added === 1 ? '' : 's'} from Google Photos.${failed ? ` ${failed} could not be copied.` : ''}${kept ? ' They are kept in the photo library.' : ''} Press Save for the TV.`;
         setStatus(summary, 'dirty');
         buildInspector();
       } catch (error) {
@@ -1476,10 +1568,10 @@ function buildGooglePhotos(settings) {
       }
     });
     box.append(run);
-    if (photosConnected()) {
+    if (photosRemembered() || photosConnected()) {
       const who = photosAccount();
       box.append(el('p', 'note gphotos-account', who
-        ? `Connected as ${who}. Google's photo window opens in this account. If this browser is signed in to more than one Google account, make sure the photos are in this one.`
+        ? `Connected as ${who} on this computer. It stays connected; Google only asks again if you choose a different account. Google's photo window opens in this account.`
         : 'Connected to Google Photos.'));
       box.append(actionButton('Use a different Google account', async () => {
         disconnectPhotos();

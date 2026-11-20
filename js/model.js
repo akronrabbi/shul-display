@@ -114,7 +114,13 @@ export function normalizeConfig(config) {
   const google = {
     photosClientId: String(raw.google?.photosClientId || '').trim().slice(0, 200),
   };
-  return { version: 2, activeTv, tvs, google };
+  // Every picture uploaded or copied from Google Photos, so it can be used again.
+  const seen = new Set();
+  const library = (Array.isArray(raw.library) ? raw.library : [])
+    .filter((item) => item && /^https?:\/\//i.test(String(item.url || '')) && !seen.has(item.url) && seen.add(item.url))
+    .slice(-1000)
+    .map((item) => ({ url: String(item.url), name: String(item.name || '').slice(0, 120), from: item.from === 'google-photos' ? 'google-photos' : 'upload', at: String(item.at || '') }));
+  return { version: 2, activeTv, tvs, google, library };
 }
 
 export function pickTv(config, param) {

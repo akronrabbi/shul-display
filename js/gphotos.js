@@ -20,8 +20,39 @@ let accessToken = '';
 let tokenExpires = 0;
 let accountEmail = '';
 
+// Remembered on this computer: the account that was connected (until "Use a
+// different Google account"), and Google's one-hour pass while it lasts.
+// Google gives a website without its own server a pass for one hour only, so
+// after that a click renews it quietly, without choosing an account again.
+const ACCOUNT_KEY = 'shul-gphotos-account';
+const PASS_KEY = 'shul-gphotos-pass';
+
+function remember() {
+  try {
+    if (accountEmail) localStorage.setItem(ACCOUNT_KEY, accountEmail);
+    if (accessToken) localStorage.setItem(PASS_KEY, JSON.stringify({ token: accessToken, expires: tokenExpires, email: accountEmail }));
+  } catch { /* private mode */ }
+}
+
+function restore() {
+  try {
+    accountEmail = localStorage.getItem(ACCOUNT_KEY) || '';
+    const pass = JSON.parse(localStorage.getItem(PASS_KEY) || 'null');
+    if (pass?.token && Number(pass.expires) > Date.now() + 60000 && (!accountEmail || pass.email === accountEmail)) {
+      accessToken = pass.token;
+      tokenExpires = Number(pass.expires);
+    }
+  } catch { /* ignore */ }
+}
+restore();
+
+// The connected account, even when its one-hour pass has run out.
 export function photosAccount() {
-  return photosConnected() ? accountEmail : '';
+  return accountEmail;
+}
+
+export function photosRemembered() {
+  return Boolean(accountEmail);
 }
 
 export function disconnectPhotos() {
@@ -29,7 +60,11 @@ export function disconnectPhotos() {
   accessToken = '';
   tokenExpires = 0;
   accountEmail = '';
-  try { globalThis.google?.accounts?.oauth2?.revoke?.(token, () => {}); } catch { /* already gone */ }
+  try {
+    localStorage.removeItem(ACCOUNT_KEY);
+    localStorage.removeItem(PASS_KEY);
+  } catch { /* ignore */ }
+  try { if (token) globalThis.google?.accounts?.oauth2?.revoke?.(token, () => {}); } catch { /* already gone */ }
 }
 
 async function readAccount() {
@@ -38,10 +73,8 @@ async function readAccount() {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const body = await response.json().catch(() => ({}));
-    accountEmail = String(body.email || '');
-  } catch {
-    accountEmail = '';
-  }
+    if (body.email) accountEmail = String(body.email);
+  } catch { /* keep the remembered one */ }
 }
 
 function loadGis() {
@@ -75,9 +108,12 @@ export async function connectPhotos(clientId, { chooseAccount = false } = {}) {
   }
   await loadGis();
   return new Promise((resolve, reject) => {
+    const quiet = !chooseAccount && accountEmail;
     const client = globalThis.google.accounts.oauth2.initTokenClient({
       client_id: id,
       scope: SCOPE,
+      // With a remembered account, Google renews the pass without asking again.
+      ...(quiet ? { hint: accountEmail, login_hint: accountEmail } : {}),
       callback: async (response) => {
         if (response?.error || !response?.access_token) {
           reject(new Error(explain(response?.error_description || response?.error || 'Google did not allow access.')));
@@ -86,13 +122,14 @@ export async function connectPhotos(clientId, { chooseAccount = false } = {}) {
         accessToken = response.access_token;
         tokenExpires = Date.now() + (Number(response.expires_in) || 3600) * 1000;
         await readAccount();
+        remember();
         resolve(accountEmail);
       },
       error_callback: (error) => {
         reject(new Error(error?.type === 'popup_closed' ? 'The Google window was closed before you finished.' : explain(error?.message || 'Google sign-in did not finish.')));
       },
     });
-    client.requestAccessToken({ prompt: chooseAccount ? 'select_account consent' : 'select_account' });
+    client.requestAccessToken({ prompt: chooseAccount ? 'select_account consent' : (quiet ? '' : 'select_account') });
   });
 }
 
@@ -117,6 +154,12 @@ async function call(path, options = {}) {
   });
   if (response.status === 204) return {};
   const body = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    accessToken = '';
+    tokenExpires = 0;
+    try { localStorage.removeItem(PASS_KEY); } catch { /* ignore */ }
+    throw new Error('Google asked to confirm the connection again. Press the button once more.');
+  }
   if (!response.ok) throw new Error(explain(body?.error?.message || `Google Photos answered ${response.status}.`));
   return body;
 }

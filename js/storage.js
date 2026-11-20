@@ -190,12 +190,12 @@ export function createStorage(options = {}) {
       if (!token) return { ok: false, reason: 'signed-out' };
       return { ok: true, token };
     },
-    async saveOnline(config) {
+    async saveOnline(config, { history = true } = {}) {
       const clean = stripAssets(config);
       const auth = await this.withToken();
       if (!auth.ok) return auth;
       const token = auth.token;
-      try {
+      if (history) try {
         const previous = await readBoard(token);
         if (previous && JSON.stringify(previous.config) !== JSON.stringify(clean)) {
           await pushHistory(token, previous.config);
