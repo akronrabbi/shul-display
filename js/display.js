@@ -69,12 +69,15 @@ function pickScreen(now) {
   const current = board();
   const screens = current?.screens || [];
   const mode = current?.shabbosMode;
-  const restScreen = mode?.enabled ? screens.find((screen) => screen.id === mode.screenId) : null;
+  const restScreen = mode?.enabled ? screens.find((screen) => screen.id === mode.screenId && !screen.draft) : null;
   if (restScreen && calendar) {
     const rest = calendar.restWindow(now, shabbosSettingsOf(current), mode);
     if (rest?.active) return { screen: restScreen, index: screens.indexOf(restScreen), rest: true };
   }
   let pool = screens.map((screen, index) => ({ screen, index }));
+  // Draft screens are saved but never shown. If every screen is a draft, show the first.
+  const finished = pool.filter((item) => !item.screen.draft);
+  if (finished.length) pool = finished;
   if (restScreen && pool.length > 1) pool = pool.filter((item) => item.screen !== restScreen);
   if (pool.length < 2 || !current.cycleScreens) {
     const pick = pool.find((item) => item.screen.id === current.liveScreen) || pool[0];

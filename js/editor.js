@@ -140,7 +140,63 @@ function redo() {
   showSnapshot(next);
 }
 
+// Unsaved work is kept in this browser, so a reload, a closed tab, or a
+// restarted computer does not lose it. A successful Save clears it.
+const DRAFT_KEY = 'shul-editor-unsaved-v1';
+let draftTimer = 0;
+
+function keepUnsaved() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    try {
+      // Only ever write here. Clearing happens on Save, or when the person throws the changes away.
+      if (dirty()) localStorage.setItem(DRAFT_KEY, JSON.stringify({ at: new Date().toISOString(), base: savedJson, state }));
+    } catch { /* storage full or blocked */ }
+  }, 600);
+}
+
+function clearUnsaved() {
+  clearTimeout(draftTimer);
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+}
+
+function offerUnsaved() {
+  let kept = null;
+  try { kept = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch { kept = null; }
+  if (!kept?.state) return;
+  const keptJson = JSON.stringify(normalize(kept.state));
+  if (keptJson === savedJson) {
+    clearUnsaved();
+    return;
+  }
+  const bar = el('div', 'unsaved-bar');
+  const when = stamp(kept.at);
+  const changedSince = kept.base && kept.base !== savedJson;
+  bar.append(el('span', '', `You have changes from ${when || 'earlier'} that were not saved.${changedSince ? ' The board was saved from somewhere else since then.' : ''}`));
+  const restore = actionButton('Bring them back', () => {
+    clearTimeout(undoTimer);
+    commitUndo();
+    state = normalize(kept.state);
+    selectedId = null;
+    mode = 'screen';
+    paintChrome();
+    renderCanvas();
+    buildInspector();
+    markDirty();
+    bar.remove();
+    setStatus('Brought back your unsaved changes. Save when ready.', 'dirty');
+  });
+  restore.classList.add('btn-primary');
+  const discard = tapTwice('Throw them away', 'Tap again to throw them away', () => {
+    clearUnsaved();
+    bar.remove();
+  });
+  bar.append(restore, discard);
+  document.querySelector('.tv-bar').before(bar);
+}
+
 function markDirty() {
+  keepUnsaved();
   if (dirty()) setStatus('Not saved yet', 'dirty');
   else if (!hasLocal) setStatus('Published layout. Press Save to put it online.', 'dirty');
   else setStatus('Saved. The TV is up to date.', 'saved');
@@ -1481,9 +1537,9 @@ function buildPdfForm(settings) {
 
 function liveScreenId() {
   const board = tv();
-  const ids = board.screens.map((item) => item.id);
-  if (ids.includes(board.liveScreen)) return board.liveScreen;
-  return ids[Math.min(ids.length - 1, Math.max(0, Number(board.activeScreen) || 0))];
+  const shown = board.screens.filter((item) => !item.draft).map((item) => item.id);
+  if (shown.includes(board.liveScreen)) return board.liveScreen;
+  return shown[0] || board.screens[0]?.id;
 }
 
 function buildScreenForm() {
@@ -1492,7 +1548,21 @@ function buildScreenForm() {
   inspector.append(el('h2', 'side-title', 'This screen'));
   inspector.append(el('p', 'hint', 'Editing a screen does not change which one the TV shows. Add pieces from the left.'));
   const onTv = el('div', 'live-box');
-  if (board.cycleScreens && board.screens.length > 1) {
+  const shownCount = board.screens.filter((item) => !item.draft).length;
+  if (current.draft) {
+    onTv.classList.add('is-draft');
+    onTv.append(el('strong', '', 'Draft: not on the TV.'));
+    onTv.append(el('p', 'note', 'Save keeps this screen online so nothing is lost, but the TV never shows it, even when cycling. When it is ready, press the button.'));
+    const ready = actionButton('Ready for the TV', () => {
+      delete current.draft;
+      markDirty();
+      paintChrome();
+      buildInspector();
+      setStatus(`"${current.name || 'This screen'}" is ready. ${board.cycleScreens ? 'The TV will include it in the cycle' : 'Use Show this screen on the TV to put it up'} after you Save.`, 'dirty');
+    });
+    ready.classList.add('btn-primary');
+    onTv.append(ready);
+  } else if (board.cycleScreens && board.screens.length > 1) {
     onTv.append(el('strong', '', 'The TV cycles through every screen.'));
     onTv.append(el('p', 'note', 'Turn off "Cycle through screens" to show just one.'));
   } else if (current.id === liveScreenId()) {
@@ -1511,6 +1581,18 @@ function buildScreenForm() {
     });
     show.classList.add('btn-primary');
     onTv.append(show);
+  }
+  if (!current.draft && shownCount > 1) {
+    const back = actionButton('Make this a draft (hide it from the TV)', () => {
+      current.draft = true;
+      if (board.liveScreen === current.id) board.liveScreen = board.screens.find((item) => !item.draft)?.id;
+      markDirty();
+      paintChrome();
+      buildInspector();
+      setStatus(`"${current.name || 'This screen'}" is now a draft. The TV will not show it after you Save.`, 'dirty');
+    });
+    back.classList.add('btn-quiet');
+    onTv.append(back);
   }
   inspector.append(onTv);
   const name = document.createElement('input');
@@ -1565,7 +1647,7 @@ function buildShabbosModeForm() {
     buildInspector();
   }));
   if (modeSettings.enabled) {
-    const options = [['', 'Choose a screen'], ...board.screens.map((item, index) => [item.id, item.name || `Screen ${index + 1}`])];
+    const options = [['', 'Choose a screen'], ...board.screens.map((item, index) => [item.id, `${item.name || `Screen ${index + 1}`}${item.draft ? ' (draft: press Ready for the TV first)' : ''}`])];
     box.append(field('Screen to show', selectInput(modeSettings.screenId, options, (value) => {
       modeSettings.screenId = value;
       buildInspector();
@@ -1680,6 +1762,7 @@ function buildTemplatesForm() {
         name: template.label,
         duration: 20,
         widgets: applyTemplate(template, [], defaultSettings, () => uid('w')),
+        draft: true,
       };
       tv().screens.push(created);
       tv().activeScreen = tv().screens.length - 1;
@@ -1687,7 +1770,7 @@ function buildTemplatesForm() {
       markDirty();
       paintChrome();
       renderCanvas();
-      setStatus(`Added a ${template.label} screen. Change anything you like, then Save.`, 'dirty');
+      setStatus(`Added a ${template.label} screen as a draft. Save keeps it without showing it on the TV.`, 'dirty');
     }));
     card.append(row);
     inspector.append(card);
@@ -2190,7 +2273,11 @@ function paintChrome() {
   const live = liveScreenId();
   board.screens.forEach((item, index) => {
     const button = el('button', `tab${index === board.activeScreen ? ' on' : ''}`, item.name || `Screen ${index + 1}`);
-    if (!board.cycleScreens && item.id === live) {
+    if (item.draft) {
+      button.classList.add('draft');
+      button.title = 'Draft: saved, but not shown on the TV';
+      button.append(el('span', 'live-dot draft', 'Draft'));
+    } else if (!board.cycleScreens && item.id === live) {
       button.classList.add('live');
       button.title = 'This is the screen on the TV';
       button.append(el('span', 'live-dot', 'On TV'));
@@ -2214,7 +2301,7 @@ function paintChrome() {
   const add = el('button', 'tab', '+ Screen');
   add.type = 'button';
   add.addEventListener('click', () => {
-    tv().screens.push({ id: uid('s'), name: `Screen ${tv().screens.length + 1}`, duration: 20, widgets: [] });
+    tv().screens.push({ id: uid('s'), name: `Screen ${tv().screens.length + 1}`, duration: 20, widgets: [], draft: true });
     tv().activeScreen = tv().screens.length - 1;
     selectedId = null;
     mode = 'screen';
@@ -2353,7 +2440,9 @@ async function save() {
     if (result.ok) {
       savedJson = JSON.stringify(state);
       hasLocal = true;
-      setStatus('Saved. The TV updates within a minute.', 'saved');
+      clearUnsaved();
+      const drafts = tv().screens.filter((item) => item.draft).length;
+      setStatus(drafts ? `Saved. The TV updates within a minute. ${drafts} draft screen${drafts === 1 ? ' is' : 's are'} kept but not shown.` : 'Saved. The TV updates within a minute.', 'saved');
       return;
     }
     status.dataset.state = 'error';
@@ -2727,6 +2816,7 @@ function layoutUsePanel(layoutName, saved, say) {
       name: from.name && from.name !== 'Main' ? from.name : layoutName.slice(0, 40),
       duration: from.duration || 20,
       widgets: freshWidgets(from.widgets),
+      draft: true,
     });
     tv().activeScreen = tv().screens.length - 1;
     done(`Added "${layoutName}" as a new screen on ${tv().name || 'this TV'}.`);
@@ -2759,6 +2849,7 @@ async function keepOnline(next) {
   }
   savedJson = JSON.stringify(state);
   hasLocal = true;
+  clearUnsaved();
   seedUndo();
   paintChrome();
   renderCanvas();
@@ -2993,6 +3084,7 @@ async function init() {
   await renderCanvas();
   seedUndo();
   markDirty();
+  offerUnsaved();
   refreshTvStatus();
   setInterval(refreshTvStatus, 60000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
