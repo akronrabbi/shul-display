@@ -30,6 +30,8 @@
       <div class="more-wrap">
         <button type="button" class="btn menu-toggle" id="menu-toggle" aria-expanded="false" aria-controls="top-actions">More</button>
         <div class="top-actions" id="top-actions">
+          <button type="button" class="btn mobile-only" id="week-m">This week</button>
+          <button type="button" class="btn mobile-only" id="templates-m">Ready layouts</button>
           <button type="button" class="btn" id="open-tv">Open the TV</button>
           <button type="button" class="btn" id="save-as-layout">Save as a named layout...</button>
           <button type="button" class="btn" id="layouts">Saved layouts</button>
@@ -74,6 +76,7 @@
     <select id="tv-select" class="tv-select" aria-label="Which TV"></select>
     <div class="tv-tabs" id="tv-tabs" role="tablist" aria-label="Which TV"></div>
     <span class="tv-status" id="tv-status" hidden></span>
+    <button type="button" class="btn mobile-only" id="tv-more" aria-expanded="false">TV settings</button>
     <label class="tv-name-label">Name <input id="tv-name" type="text" maxlength="40" aria-label="TV name"></label>
     <label class="rotate-control">Rotate design to fit screen
       <select id="tv-rotate" aria-label="Rotate design to fit screen">
