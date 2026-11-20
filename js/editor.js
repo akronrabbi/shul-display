@@ -471,7 +471,29 @@ function toggleMulti(id) {
   buildInspector();
 }
 
+function wireShellDrop(shell, widget) {
+  if (widget.type !== 'photos') return;
+  const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes('Files');
+  shell.addEventListener('dragover', (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    shell.classList.add('drop-over');
+  });
+  shell.addEventListener('dragleave', () => shell.classList.remove('drop-over'));
+  shell.addEventListener('drop', (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    shell.classList.remove('drop-over');
+    selectedId = widget.id;
+    multi.clear();
+    mode = 'widget';
+    uploadPictures([...event.dataTransfer.files], widget.settings, widget.id);
+  });
+}
+
 function wireShell(shell, widget) {
+  wireShellDrop(shell, widget);
   shell.addEventListener('pointerdown', (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -1372,24 +1394,7 @@ function buildPhotosForm(settings) {
   mine.append(el('p', 'note', 'Removing a photo here keeps it in the Photo library.'));
 
   const add = section('Add photos');
-  const upload = document.createElement('input');
-  upload.type = 'file';
-  upload.accept = 'image/*';
-  upload.multiple = true;
-  upload.addEventListener('change', async () => {
-    for (const file of upload.files) {
-      const uploaded = await storeFile(file);
-      if (!uploaded) continue;
-      settings.images.push({ url: uploaded.url, name: file.name });
-      addToLibrary({ url: uploaded.url, name: file.name, from: 'upload' });
-    }
-    upload.value = '';
-    markDirty();
-    saveLibraryNow();
-    refreshWidget(selectedId);
-    buildInspector();
-  });
-  add.append(field('Upload from this computer or phone', upload));
+  add.append(dropZone('Drop pictures here to add them to this slideshow', 'or click to choose them', (files) => uploadPictures(files, settings)));
   buildLibrary(settings, add);
   buildGooglePhotos(settings, add);
   const links = document.createElement('textarea');
@@ -1490,6 +1495,81 @@ function buildPhotosForm(settings) {
 
 let editingClientId = false;
 
+// Uploads pictures, keeps them in the Photo library, and, when a slideshow is
+// given, adds them to it. Used by every drop area and file chooser.
+async function uploadPictures(files, slideshow = null, widgetId = selectedId) {
+  const pictures = [...(files || [])].filter((file) => /^image\//.test(file.type || '') || /\.(jpe?g|png|gif|webp|heic|heif|avif)$/i.test(file.name || ''));
+  if (!pictures.length) {
+    setStatus('Only pictures can be added here (JPEG, PNG, GIF, WebP).', 'error');
+    return 0;
+  }
+  let added = 0;
+  for (const file of pictures) {
+    setStatus(`Uploading picture ${added + 1} of ${pictures.length}...`, 'busy');
+    const uploaded = await storeFile(file);
+    if (!uploaded) return added;
+    addToLibrary({ url: uploaded.url, name: file.name, from: 'upload' });
+    if (slideshow) slideshow.images.push({ url: uploaded.url, name: file.name });
+    added += 1;
+  }
+  markDirty();
+  const kept = await saveLibraryNow();
+  if (slideshow && widgetId) refreshWidget(widgetId);
+  buildInspector();
+  setStatus(slideshow
+    ? `Added ${added} picture${added === 1 ? '' : 's'} to the slideshow${kept ? ' and the library' : ''}. Press Save for the TV.`
+    : `Added ${added} picture${added === 1 ? '' : 's'} to the Photo library${kept ? '' : ' (kept when you Save)'}. Tap one to put it in a slideshow.`, slideshow ? 'dirty' : 'saved');
+  return added;
+}
+
+// A box that takes pictures dragged from the computer, or a click to choose them.
+function dropZone(title, hint, onFiles) {
+  const zone = el('div', 'drop-zone');
+  zone.tabIndex = 0;
+  zone.setAttribute('role', 'button');
+  zone.append(el('strong', '', title), el('span', '', hint));
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.hidden = true;
+  input.addEventListener('change', () => {
+    const files = [...input.files];
+    input.value = '';
+    if (files.length) onFiles(files);
+  });
+  zone.append(input);
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      input.click();
+    }
+  });
+  let depth = 0;
+  zone.addEventListener('dragenter', (event) => {
+    event.preventDefault();
+    depth += 1;
+    zone.classList.add('over');
+  });
+  zone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+  zone.addEventListener('dragleave', () => {
+    depth = Math.max(0, depth - 1);
+    if (!depth) zone.classList.remove('over');
+  });
+  zone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    depth = 0;
+    zone.classList.remove('over');
+    const files = [...(event.dataTransfer?.files || [])];
+    if (files.length) onFiles(files);
+  });
+  return zone;
+}
+
 // A Google Photos album shared by link. Add photos to that album on a phone,
 // and the TV follows: a GitHub job reads the album every 15 minutes or so.
 function buildAlbumLink(settings, host = inspector) {
@@ -1586,8 +1666,8 @@ function buildLibrary(settings, host = inspector) {
   const box = el('div', 'gphotos photo-library');
   box.append(el('strong', '', `Photo library (${library.length})`));
   box.append(el('p', 'note', 'A shelf of every picture you have uploaded or copied in. Pictures here are not on the TV until you tap them into a slideshow.'));
+  box.append(dropZone('Drop pictures here to keep them in the library', 'or click to choose them. They are not added to any slideshow.', (files) => uploadPictures(files, null)));
   if (!library.length) {
-    box.append(el('p', 'note', 'Every picture you upload or copy from Google Photos is kept here, so you can use it again on any screen or TV.'));
     host.append(box);
     return;
   }
@@ -2915,6 +2995,10 @@ function bindChrome() {
       markDirty();
     }
   });
+  // A picture dropped outside a drop area must not make the browser leave the editor.
+  ['dragover', 'drop'].forEach((type) => document.addEventListener(type, (event) => {
+    if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault();
+  }));
   window.addEventListener('beforeunload', (event) => {
     if (!dirty()) return;
     event.preventDefault();
