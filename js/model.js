@@ -26,6 +26,9 @@ function normalizeScreen(screen) {
   next.duration = Number(next.duration) || 30;
   next.name = next.name || 'Main';
   next.id = next.id || 'main';
+  // A draft screen is saved with the board but never shown on the TV.
+  if (next.draft) next.draft = true;
+  else delete next.draft;
   next.widgets.forEach((widget) => {
     widget.settings = { ...defaultSettings(widget.type), ...(widget.settings || {}) };
     widget.place = widget.place || {};
@@ -52,8 +55,10 @@ export function normalizeTv(tv, fallbackName) {
   // The screen the TV shows when it is not cycling. Older boards used the tab
   // that was open in the editor when they were saved, so start from that.
   const ids = next.screens.map((screen) => screen.id);
-  if (!ids.includes(next.liveScreen)) {
-    next.liveScreen = ids[Math.min(ids.length - 1, Math.max(0, Number(next.activeScreen) || 0))];
+  const shown = next.screens.filter((screen) => !screen.draft).map((screen) => screen.id);
+  if (!shown.includes(next.liveScreen)) {
+    const guess = ids[Math.min(ids.length - 1, Math.max(0, Number(next.activeScreen) || 0))];
+    next.liveScreen = shown.includes(guess) ? guess : (shown[0] || ids[0]);
   }
   next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
   next.theme = normalizeTheme(next.theme);
