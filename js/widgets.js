@@ -107,7 +107,7 @@ export function defaultSettings(type) {
         tone: 'clear',
         url: 'assets/akron-shul-logo.png',
         assetId: null,
-        showName: true,
+        showName: false,
         name: 'Anshe Sfard',
         subtitle: 'Revere Road',
       };
@@ -391,20 +391,49 @@ export function shabbosArrangement(settings) {
   };
 }
 
+export const SHUL_LOGO = 'assets/akron-shul-logo.png';
+const SHUL_LOGO_LIGHT = 'assets/akron-shul-logo-light.png';
+
+export function isShulLogo(settings) {
+  return !settings?.assetId && String(settings?.url || '').replace(/^\.\//, '') === SHUL_LOGO;
+}
+
+function isLightColor(color) {
+  const m = String(color).match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+  if (!m) return false;
+  const [r, g, b] = m.slice(1, 4).map(Number);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
+}
+
 async function mountLogo(body, widget, ctx) {
+  const bag = [];
   const settings = widget.settings;
   const root = h('div', 'logo-card');
-  const src = await resolveUrl(ctx, settings.assetId, settings.url);
+  const shul = isShulLogo(settings);
+  const src = shul ? SHUL_LOGO : await resolveUrl(ctx, settings.assetId, settings.url);
+  let img = null;
   if (src) {
-    const img = h('img', 'logo-img');
-    img.alt = settings.name || 'Logo';
+    img = h('img', `logo-img${shul ? ' shul-mark' : ''}`);
+    img.alt = settings.name || 'Anshe Sfard';
     img.src = src;
     root.append(img);
   }
-  if (settings.showName !== false && settings.name) root.append(piece('logo-name', settings.name, settings.type, 'title'));
+  // The shul logo already says Anshe Sfard, so the name line would repeat it.
+  const repeatsName = shul && /^\s*anshe\s+sfard\s*$/i.test(settings.name || '');
+  if (settings.showName !== false && settings.name && !repeatsName) root.append(piece('logo-name', settings.name, settings.type, 'title'));
   if (settings.subtitle) root.append(piece('logo-sub', settings.subtitle, settings.type, 'small'));
   body.append(root);
-  return () => {};
+  if (shul && img) {
+    // Black logo on light backgrounds, white logo on dark ones. The text color
+    // of the box says which, for every theme and card color.
+    const choose = () => {
+      const next = isLightColor(getComputedStyle(root).color) ? SHUL_LOGO_LIGHT : SHUL_LOGO;
+      if (!img.src.endsWith(next)) img.src = next;
+    };
+    choose();
+    every(2000, choose, bag);
+  }
+  return () => bag.forEach((fn) => fn());
 }
 
 function mountWelcome(body, widget) {

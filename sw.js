@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v7';
+const CACHE = 'shul-display-v8';
 const FILES = [
   './',
   './index.html',
@@ -33,6 +33,7 @@ const FILES = [
   './vendor/pdfjs/pdf.min.mjs',
   './vendor/pdfjs/pdf.worker.min.mjs',
   './assets/akron-shul-logo.png',
+  './assets/akron-shul-logo-light.png',
   './vendor/hebcal/hebcal-core.min.js',
 ];
 
