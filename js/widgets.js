@@ -490,14 +490,22 @@ function chunk(text, type) {
   return node;
 }
 
+export function photoSource(settings) {
+  if (!cleanAlbumLink(settings?.albumLink)) return 'added';
+  return settings.source === 'album' || settings.source === 'added' ? settings.source : 'both';
+}
+
 async function collectPhotoUrls(settings, ctx) {
   const urls = [];
-  for (const image of settings.images || []) {
+  const source = photoSource(settings);
+  const useAdded = source !== 'album';
+  const useAlbum = source !== 'added';
+  for (const image of useAdded ? settings.images || [] : []) {
     const url = image.assetId ? await ctx.resolveAsset(image.assetId) : safeImageUrl(image.url);
     if (url) urls.push(url);
   }
   let albumNote = '';
-  if (cleanAlbumLink(settings.albumLink)) {
+  if (useAlbum && cleanAlbumLink(settings.albumLink)) {
     const album = await readAlbumList(settings.albumLink);
     if (album?.photos?.length) {
       for (const photo of album.photos) urls.push(albumPhotoUrl(photo.url));
@@ -506,7 +514,7 @@ async function collectPhotoUrls(settings, ctx) {
     }
   }
   let driveError = null;
-  if (String(settings.driveFolder || '').trim()) {
+  if (useAdded && String(settings.driveFolder || '').trim()) {
     try {
       const listed = await listDriveFolderImages(settings.driveFolder, settings.driveApiKey);
       for (const image of listed) urls.push(image.url);

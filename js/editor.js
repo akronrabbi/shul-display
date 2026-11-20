@@ -1033,14 +1033,20 @@ function buildInspector() {
     inspector.append(field('Havdalah label', textInput(settings.havdalahLabel || 'Havdalah', (value) => { settings.havdalahLabel = value; })));
   }
   if (widget.type === 'photos' || widget.type === 'pdf') {
-    inspector.append(field('Caption', textInput(settings.caption || '', (value) => { settings.caption = value; })));
+    const caption = textInput(settings.caption || '', (value) => { settings.caption = value; });
+    caption.placeholder = 'Optional words over the bottom of the picture';
+    caption.addEventListener('change', () => buildInspector());
+    inspector.append(field('Caption', caption));
   }
   if (widget.type !== 'welcome') {
     inspector.append(field('Color', selectInput(settings.tone, toneChoices(widget.type), (value) => { settings.tone = value; })));
   } else {
     inspector.append(field('Color', selectInput(settings.tone, toneChoices('welcome'), (value) => { settings.tone = value; })));
   }
-  appendTypePanel(settings, TYPE_PARTS[widget.type] || [], () => refreshWidget(widget.id), FIT_TYPES.includes(widget.type));
+  const captionOnly = widget.type === 'photos' || widget.type === 'pdf';
+  if (!captionOnly || settings.caption) {
+    appendTypePanel(settings, TYPE_PARTS[widget.type] || [], () => refreshWidget(widget.id), FIT_TYPES.includes(widget.type), captionOnly ? 'Caption style' : 'Text style');
+  }
   inspector.append(dateRangeBlock(widget, () => renderCanvas()));
 
   const order = el('div', 'tool-group');
@@ -1276,19 +1282,74 @@ function buildEventsForm(settings, host = inspector, refresh = () => refreshWidg
   }));
 }
 
+function section(title, className = '') {
+  const box = el('section', `photo-section ${className}`.trim());
+  box.append(el('h3', 'photo-section-title', title));
+  inspector.append(box);
+  return box;
+}
+
+// What this slideshow shows, in plain words, at the top of the panel.
+function photoSummary(settings) {
+  const box = el('div', 'photo-summary');
+  const source = photoSourceOf(settings);
+  const parts = [];
+  const added = settings.images.length;
+  const drive = String(settings.driveFolder || '').trim();
+  if (source !== 'album') {
+    if (added) parts.push(`${added} photo${added === 1 ? '' : 's'} you added`);
+    if (drive) parts.push('the Google Drive folder');
+  }
+  const albumLine = el('span', '', '');
+  if (source !== 'added' && settings.albumLink) {
+    parts.push('__album__');
+    albumLine.textContent = 'the Google Photos album';
+    readAlbumList(settings.albumLink).then((album) => {
+      if (album?.photos?.length) albumLine.textContent = `the Google Photos album${album.title ? ` "${album.title}"` : ''} (${album.photos.length} photos)`;
+      else albumLine.textContent = 'the Google Photos album (after its first check)';
+    });
+  }
+  box.append(el('strong', '', 'On the TV, this slideshow shows: '));
+  if (!parts.length) {
+    box.append(el('span', '', 'nothing yet. Add photos below, or use a Google Photos album.'));
+  } else {
+    parts.forEach((part, index) => {
+      if (index) box.append(document.createTextNode(index === parts.length - 1 ? ' and ' : ', '));
+      box.append(part === '__album__' ? albumLine : el('span', '', part));
+    });
+    box.append(document.createTextNode('.'));
+  }
+  inspector.append(box);
+  if (settings.albumLink) {
+    inspector.append(choiceRow('Show', source, [['both', 'Both'], ['album', 'Album only'], ['added', 'Photos I added only']], (value) => {
+      settings.source = value === 'both' ? '' : value;
+      if (!settings.source) delete settings.source;
+      markDirty();
+      refreshWidget(selectedId);
+    }));
+  }
+}
+
+function photoSourceOf(settings) {
+  if (!cleanAlbumLink(settings.albumLink)) return 'added';
+  return settings.source === 'album' || settings.source === 'added' ? settings.source : 'both';
+}
+
 function buildPhotosForm(settings) {
-  inspector.append(el('p', 'note', PHOTOS_HELP));
-  buildAlbumLink(settings);
-  buildGooglePhotos(settings);
-  buildLibrary(settings);
+  photoSummary(settings);
+
+  const mine = section(`Photos in this slideshow (${settings.images.length})`);
+  if (photoSourceOf(settings) === 'album') mine.append(el('p', 'note', 'Show is set to Album only, so these are kept but not shown.'));
+  if (!settings.images.length) mine.append(el('p', 'note', 'None yet. Add some below, or tap pictures in the Photo library.'));
   const list = el('div');
   settings.images.forEach((image, index) => {
     const row = el('div', 'thumb');
     const img = document.createElement('img');
     img.alt = '';
+    img.referrerPolicy = 'no-referrer';
     if (image.assetId) storage.assetURL(image.assetId).then((url) => { if (url) img.src = url; });
     else img.src = image.url || '';
-    row.append(img);
+    row.append(img, el('span', 'thumb-name', image.name || ''));
     row.append(actionButton('Remove', async () => {
       const id = image.assetId;
       settings.images.splice(index, 1);
@@ -1299,15 +1360,18 @@ function buildPhotosForm(settings) {
     }));
     list.append(row);
   });
-  inspector.append(list);
+  mine.append(list);
   if (settings.images.length > 1) {
-    inspector.append(tapTwice(`Remove all ${settings.images.length} photos`, 'Tap again to remove them all', () => {
+    mine.append(tapTwice(`Remove all ${settings.images.length} photos`, 'Tap again to remove them all', () => {
       settings.images.splice(0, settings.images.length);
       markDirty();
       refreshWidget(selectedId);
       buildInspector();
     }));
   }
+  mine.append(el('p', 'note', 'Removing a photo here keeps it in the Photo library.'));
+
+  const add = section('Add photos');
   const upload = document.createElement('input');
   upload.type = 'file';
   upload.accept = 'image/*';
@@ -1325,10 +1389,16 @@ function buildPhotosForm(settings) {
     refreshWidget(selectedId);
     buildInspector();
   });
-  inspector.append(field('Upload photos', upload));
+  add.append(field('Upload from this computer or phone', upload));
+  buildLibrary(settings, add);
+  buildGooglePhotos(settings, add);
   const links = document.createElement('textarea');
   links.placeholder = 'One image address per line';
-  inspector.append(field('Or paste image links', links));
+  const pasted = document.createElement('details');
+  pasted.className = 'key-steps';
+  const pastedTitle = document.createElement('summary');
+  pastedTitle.textContent = 'Paste image addresses';
+  pasted.append(pastedTitle, field('Image addresses', links));
   const addLinks = actionButton('Add the links', () => {
     const { images, errors } = classifyImageList(links.value);
     settings.images.push(...images);
@@ -1341,17 +1411,28 @@ function buildPhotosForm(settings) {
     if (album) {
       setStatus('That was a Google Photos album link, so it is now the album for this piece. Press Save.', 'dirty');
     } else if (errors.length) {
-      inspector.prepend(el('p', 'warn', 'One of those lines was not an image address, so it was skipped.'));
+      setStatus('One of those lines was not an image address, so it was skipped.', 'error');
     }
   });
-  inspector.append(addLinks);
+  pasted.append(addLinks);
+  add.append(pasted);
+
+  buildAlbumLink(settings, section('Google Photos album (updates on its own)', 'album-section'));
+
+  const driveBox = document.createElement('details');
+  driveBox.className = 'photo-section drive-section';
+  driveBox.open = Boolean(String(settings.driveFolder || '').trim());
+  const driveTitle = document.createElement('summary');
+  driveTitle.className = 'photo-section-title';
+  driveTitle.textContent = 'Google Drive folder (advanced)';
+  driveBox.append(driveTitle);
   const folder = document.createElement('input');
   folder.type = 'text';
   folder.placeholder = 'https://drive.google.com/drive/folders/...';
   folder.value = settings.driveFolder || '';
   folder.spellcheck = false;
   folder.addEventListener('input', () => { settings.driveFolder = folder.value.trim(); markDirty(); });
-  inspector.append(field('Google Drive folder link', folder));
+  driveBox.append(field('Google Drive folder link', folder));
   const key = document.createElement('input');
   key.type = 'text';
   key.placeholder = 'API key';
@@ -1359,7 +1440,7 @@ function buildPhotosForm(settings) {
   key.spellcheck = false;
   key.autocomplete = 'off';
   key.addEventListener('input', () => { settings.driveApiKey = key.value.trim(); markDirty(); });
-  inspector.append(field('Google API key', key));
+  driveBox.append(field('Google API key', key));
   const driveStatus = el('p', 'note', 'The TV looks again about every 10 minutes, so new pictures show up on their own.');
   const check = actionButton('Check the folder', async () => {
     check.disabled = true;
@@ -1376,11 +1457,11 @@ function buildPhotosForm(settings) {
     }
     check.disabled = false;
   });
-  inspector.append(check);
-  inspector.append(driveStatus);
+  driveBox.append(check);
+  driveBox.append(driveStatus);
   const steps = document.createElement('details');
   steps.className = 'key-steps';
-  steps.open = true;
+  steps.open = !settings.driveApiKey;
   const summary = document.createElement('summary');
   summary.textContent = 'How to make a safe Google key';
   const stepsBody = el('ol', 'note');
@@ -1394,23 +1475,26 @@ function buildPhotosForm(settings) {
   ].forEach((line) => stepsBody.append(el('li', '', line)));
   const caution = el('p', 'note', 'The key is visible in the page, so the limits in step 4 matter. Do not leave it open to every website or every Google API. To try the folder on this computer before the site is published, you can also add http://localhost/* and http://127.0.0.1/* .');
   steps.append(summary, stepsBody, caution);
-  inspector.append(steps);
-  inspector.append(field('Seconds on each photo', numberInput(settings.interval, (value) => { settings.interval = Number(value); })));
-  inspector.append(field('Movement between photos', selectInput(photoTransition(settings), PHOTO_TRANSITIONS, (value) => {
+  driveBox.append(steps);
+  inspector.append(driveBox);
+
+  const show = section('Slideshow');
+  show.append(field('Seconds on each photo', numberInput(settings.interval, (value) => { settings.interval = Number(value); })));
+  show.append(field('Movement between photos', selectInput(photoTransition(settings), PHOTO_TRANSITIONS, (value) => {
     settings.transition = value;
     settings.crossfade = value !== 'none';
   })));
-  inspector.append(field('Order', selectInput(settings.order || 'in-order', [['in-order', 'In order'], ['shuffle', 'Shuffle']], (value) => { settings.order = value; })));
-  inspector.append(field('Fit', selectInput(settings.fit, [['cover', 'Fill the box'], ['contain', 'Show the whole photo']], (value) => { settings.fit = value; })));
+  show.append(field('Order', selectInput(settings.order || 'in-order', [['in-order', 'In order'], ['shuffle', 'Shuffle']], (value) => { settings.order = value; })));
+  show.append(field('Fit', selectInput(settings.fit, [['cover', 'Fill the box'], ['contain', 'Show the whole photo']], (value) => { settings.fit = value; })));
 }
 
 let editingClientId = false;
 
 // A Google Photos album shared by link. Add photos to that album on a phone,
 // and the TV follows: a GitHub job reads the album every 15 minutes or so.
-function buildAlbumLink(settings) {
+function buildAlbumLink(settings, host = inspector) {
   const box = el('div', 'gphotos album-link');
-  box.append(el('strong', '', 'Google Photos album (updates on its own)'));
+  box.append(el('p', 'note', 'Paste a shared album link. Add photos to the album on your phone, and the TV follows on its own.'));
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'https://photos.app.goo.gl/...';
@@ -1471,7 +1555,7 @@ function buildAlbumLink(settings) {
   ].forEach((line) => list.append(el('li', '', line)));
   steps.append(summary, list, el('p', 'note', 'Anyone who has the link can see the album, so keep it to photos meant for the lobby. Google does not officially support reading albums this way; if Google changes its pages, the TV keeps the last photos it found until it is fixed.'));
   box.append(steps);
-  inspector.append(box);
+  host.append(box);
 }
 
 function addToLibrary(entry) {
@@ -1497,16 +1581,17 @@ async function saveLibraryNow() {
   }
 }
 
-function buildLibrary(settings) {
+function buildLibrary(settings, host = inspector) {
   const library = state.library || [];
   const box = el('div', 'gphotos photo-library');
   box.append(el('strong', '', `Photo library (${library.length})`));
+  box.append(el('p', 'note', 'A shelf of every picture you have uploaded or copied in. Pictures here are not on the TV until you tap them into a slideshow.'));
   if (!library.length) {
     box.append(el('p', 'note', 'Every picture you upload or copy from Google Photos is kept here, so you can use it again on any screen or TV.'));
-    inspector.append(box);
+    host.append(box);
     return;
   }
-  box.append(el('p', 'note', 'Tap a picture to add it to this slideshow. A check means it is already in it.'));
+  box.append(el('p', 'note', 'Tap a picture to add it to this slideshow. A green check means it is already in it.'));
   const inUse = new Set(settings.images.map((image) => image.url));
   const grid = el('div', 'library-grid');
   [...library].reverse().forEach((item) => {
@@ -1550,7 +1635,7 @@ function buildLibrary(settings) {
       buildInspector();
     }));
   }
-  inspector.append(box);
+  host.append(box);
 }
 
 function googleSettings() {
@@ -1558,7 +1643,7 @@ function googleSettings() {
   return state.google;
 }
 
-function buildGooglePhotos(settings) {
+function buildGooglePhotos(settings, host = inspector) {
   const box = el('div', 'gphotos');
   box.append(el('strong', '', 'Google Photos'));
   box.append(el('p', 'note', 'Pick pictures from Google Photos, including a whole album: open the album in the Google window and select its pictures. They are copied into this board, so the TV keeps showing them. To add new ones later, pick again.'));
@@ -1681,7 +1766,7 @@ function buildGooglePhotos(settings) {
   ].forEach((line) => list.append(el('li', '', line)));
   steps.append(summary, list, el('p', 'note', 'A client ID is not a secret. Google only lets it work from the address you listed in step 4.'));
   box.append(steps);
-  inspector.append(box);
+  host.append(box);
 }
 
 function buildPdfForm(settings) {
@@ -1992,9 +2077,9 @@ function sliderRow(label, value, { min, max, step, unit = '', empty = 'Theme' },
   return field(label, row);
 }
 
-function appendTypePanel(target, parts, refresh, fits = true) {
+function appendTypePanel(target, parts, refresh, fits = true, title = 'Text style') {
   const box = el('div', 'type-panel');
-  box.append(el('h2', 'side-title', 'Text style'));
+  box.append(el('h2', 'side-title', title));
   const change = (partId, patch) => {
     setPart(target, partId, patch);
     markDirty();
