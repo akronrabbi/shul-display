@@ -151,10 +151,45 @@
 .shabbos-card .parsha-en { margin-top: 0; font-size: calc(6.2cqh * var(--t-scale, 1)); }
 .shabbos-card .parsha-he { font-size: calc(5.6cqh * var(--t-scale, 1)); }
 
+.shabbos-card { gap: var(--sh-gap, 0.8cqh); }
+.shabbos-parsha { display: flex; flex-direction: column; gap: 0.4cqh; }
+
 .shabbos-times {
-  margin-top: auto;
   display: flex;
-  gap: 4cqw;
+  gap: var(--sh-times-gap, 4cqw);
+}
+
+/* Where the parts sit in the box. Spread is the original look: the parsha at
+   the top and the times at the bottom. */
+.shabbos-card[data-vpos="spread"][data-order="parsha-first"] .shabbos-times { margin-top: auto; }
+.shabbos-card[data-vpos="spread"][data-order="times-first"] .shabbos-parsha { margin-top: auto; }
+.shabbos-card[data-vpos="top"] { justify-content: flex-start; }
+.shabbos-card[data-vpos="center"] { justify-content: center; }
+.shabbos-card[data-vpos="bottom"] { justify-content: flex-end; }
+
+.shabbos-card[data-align="center"] { text-align: center; align-items: center; }
+.shabbos-card[data-align="end"] { text-align: right; align-items: flex-end; }
+.shabbos-card[data-align="center"] .shabbos-times { justify-content: center; }
+.shabbos-card[data-align="end"] .shabbos-times { justify-content: flex-end; }
+.shabbos-card[data-align="center"] .hebrew-line { text-align: center; }
+.shabbos-card[data-align="end"] .hebrew-line { text-align: right; }
+.shabbos-card:not([data-align="start"]) .shabbos-times { width: 100%; }
+
+.shabbos-card[data-times="row"] .shabbos-times { flex-direction: row; }
+.shabbos-card[data-times="column"] .shabbos-times { flex-direction: column; }
+.shabbos-card[data-times="row"] .time-block,
+.shabbos-card[data-times="column"] .time-block { flex: 0 1 auto; }
+.shabbos-card[data-times="column"] .shabbos-times { gap: var(--sh-times-gap, 2cqh); }
+
+.shabbos-times.divided .time-block + .time-block {
+  border-left: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  padding-left: var(--sh-times-gap, 4cqw);
+}
+.shabbos-card[data-times="column"] .shabbos-times.divided .time-block + .time-block {
+  border-left: 0;
+  padding-left: 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  padding-top: var(--sh-times-gap, 2cqh);
 }
 
 .time-block { flex: 1; min-width: 0; }
@@ -176,8 +211,8 @@
 .time-when { font-size: calc(3.8cqh * var(--t-scale, 1)); }
 
 @container (max-width: 420px) {
-  .shabbos-times { flex-direction: column; gap: 2cqh; }
-  .time-value { font-size: calc(10cqh * var(--t-scale, 1)); }
+  .shabbos-card[data-times="auto"] .shabbos-times { flex-direction: column; gap: var(--sh-times-gap, 2cqh); }
+  .shabbos-card[data-times="auto"] .time-value { font-size: calc(10cqh * var(--t-scale, 1)); }
 }
 
 .logo-card {

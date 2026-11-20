@@ -629,7 +629,10 @@ function el(tag, className, text) {
 }
 
 function field(label, control) {
-  const wrap = el('label', 'field');
+  // A <label> around a row of buttons makes a click on the title press the
+  // first button, so only single form controls get a real label.
+  const single = control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement;
+  const wrap = el(single ? 'label' : 'div', 'field');
   wrap.append(el('span', '', label), control);
   return wrap;
 }
@@ -905,6 +908,7 @@ function buildInspector() {
       ], (value) => { settings.havdalahMins = Number(value); })));
     }
     inspector.append(el('p', 'note', 'Times are for Akron, Ohio, Eastern Time. Candle lighting starts at 18 minutes before sunset, which is what Hebcal uses for this shul.'));
+    buildShabbosArrangement(widget);
   }
   if (widget.type === 'logo') {
     inspector.append(checkInput(settings.showName, 'Show a name under the mark', (value) => { settings.showName = value; }));
@@ -994,6 +998,45 @@ function buildInspector() {
   remove.classList.add('btn-danger');
   inspector.append(remove);
   syncSheet();
+}
+
+function choiceRow(label, value, options, apply) {
+  const row = el('div', 'ground-row');
+  options.forEach(([id, text]) => {
+    const button = el('button', id === value ? 'on' : '', text);
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      apply(id);
+      buildInspector();
+    });
+    row.append(button);
+  });
+  return field(label, row);
+}
+
+// How the parsha and the times are laid out inside the Shabbos piece.
+function buildShabbosArrangement(widget) {
+  const settings = widget.settings;
+  if (!settings.arrange || typeof settings.arrange !== 'object') settings.arrange = {};
+  const arrange = settings.arrange;
+  const set = (key, value) => {
+    if (value === '' || value == null) delete arrange[key];
+    else arrange[key] = value;
+    markDirty();
+    refreshWidget(widget.id);
+  };
+  const box = el('div', 'tool-group');
+  box.append(el('span', 'tool-label', 'Arrangement'));
+  box.append(choiceRow('Candle lighting and havdalah', arrange.times || 'auto', [['auto', 'Automatic'], ['row', 'Side by side'], ['column', 'One above the other']], (v) => set('times', v === 'auto' ? '' : v)));
+  box.append(choiceRow('Order', arrange.order || 'parsha-first', [['parsha-first', 'Parsha, then times'], ['times-first', 'Times, then parsha']], (v) => set('order', v === 'parsha-first' ? '' : v)));
+  box.append(choiceRow('Position in the box', arrange.vpos || 'spread', [['top', 'Top'], ['center', 'Middle'], ['bottom', 'Bottom'], ['spread', 'Spread out']], (v) => set('vpos', v === 'spread' ? '' : v)));
+  box.append(choiceRow('Alignment', arrange.align || 'start', [['start', 'Left'], ['center', 'Center'], ['end', 'Right']], (v) => set('align', v === 'start' ? '' : v)));
+  box.append(sliderRow('Space between the parsha and the times', arrange.gap, { min: 0, max: 20, step: 0.5, empty: 'Auto' }, (v) => set('gap', v)));
+  box.append(sliderRow('Space between the two times', arrange.timesGap, { min: 0, max: 20, step: 0.5, empty: 'Auto' }, (v) => set('timesGap', v)));
+  box.append(checkInput(Boolean(arrange.divider), 'A thin line between the two times', (v) => set('divider', v || '')));
+  box.append(checkInput(arrange.showWhen !== false, 'Show the day and date under each time', (v) => set('showWhen', v ? '' : false)));
+  box.append(el('p', 'note', 'Spread out keeps the parsha at the top and the times at the bottom. Top, Middle, and Bottom keep them together, with the space you set.'));
+  inspector.append(box);
 }
 
 function pieceToolbar(widget) {

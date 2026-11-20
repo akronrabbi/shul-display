@@ -319,24 +319,36 @@ function mountShabbos(body, widget, ctx) {
   const root = h('div', 'plaque shabbos-card');
   body.append(root);
 
+  // Arrangement: how the parsha and the two times sit in the box.
+  const arrange = shabbosArrangement(settings);
+  root.dataset.times = arrange.times;
+  root.dataset.order = arrange.order;
+  root.dataset.vpos = arrange.vpos;
+  root.dataset.align = arrange.align;
+  if (arrange.gap != null) root.style.setProperty('--sh-gap', `${arrange.gap}cqh`);
+  if (arrange.timesGap != null) root.style.setProperty('--sh-times-gap', `${arrange.timesGap}cqi`);
+
   const paint = () => {
     const info = ctx.calendar.shabbos(ctx.now(), settings);
     root.replaceChildren();
-    root.append(piece('eyebrow', settings.heading || 'Shabbos', settings.type, 'small'));
+    if (settings.heading !== '') root.append(piece('eyebrow', settings.heading || 'Shabbos', settings.type, 'small'));
+    const parsha = h('div', 'shabbos-parsha');
     if (settings.showParsha !== false && info?.parsha) {
-      root.append(piece('parsha-en', info.parsha.en, settings.type, 'body'));
+      parsha.append(piece('parsha-en', info.parsha.en, settings.type, 'body'));
       if (settings.showHebrewParsha !== false && info.parsha.he) {
-        root.append(hebrewLine('parsha-he', info.parsha.he, settings.type, 'body'));
+        parsha.append(hebrewLine('parsha-he', info.parsha.he, settings.type, 'body'));
       }
     }
-    const times = h('div', 'shabbos-times');
+    const times = h('div', `shabbos-times${arrange.divider ? ' divided' : ''}`);
     if (!info) {
       times.append(h('p', 'quiet', 'Times are not available right now.'));
     } else {
-      times.append(timeBlock(settings.candleLabel || 'Candle lighting', info.candles.time, info.candles.when, settings.type));
-      times.append(timeBlock(settings.havdalahLabel || 'Havdalah', info.havdalah.time, info.havdalah.when, settings.type));
+      const when = (text) => (arrange.showWhen ? text : '');
+      times.append(timeBlock(settings.candleLabel || 'Candle lighting', info.candles.time, when(info.candles.when), settings.type));
+      times.append(timeBlock(settings.havdalahLabel || 'Havdalah', info.havdalah.time, when(info.havdalah.when), settings.type));
     }
-    root.append(times);
+    const parts = arrange.order === 'times-first' ? [times, parsha] : [parsha, times];
+    parts.forEach((part) => { if (part.childNodes.length) root.append(part); });
   };
 
   paint();
@@ -348,8 +360,35 @@ function timeBlock(label, time, when, type) {
   const block = h('div', 'time-block');
   block.append(piece('time-label', label, type, 'small'));
   block.append(piece('time-value', time, type, 'title'));
-  block.append(piece('time-when', when, type, 'small'));
+  if (when) block.append(piece('time-when', when, type, 'small'));
   return block;
+}
+
+const ARRANGE_DEFAULTS = {
+  times: 'auto',
+  order: 'parsha-first',
+  vpos: 'spread',
+  align: 'start',
+  gap: null,
+  timesGap: null,
+  divider: false,
+  showWhen: true,
+};
+
+export function shabbosArrangement(settings) {
+  const raw = settings?.arrange || {};
+  const pick = (key, allowed) => (allowed.includes(raw[key]) ? raw[key] : ARRANGE_DEFAULTS[key]);
+  const num = (value, min, max) => (value === '' || value == null || !Number.isFinite(Number(value)) ? null : Math.min(max, Math.max(min, Number(value))));
+  return {
+    times: pick('times', ['auto', 'row', 'column']),
+    order: pick('order', ['parsha-first', 'times-first']),
+    vpos: pick('vpos', ['top', 'center', 'bottom', 'spread']),
+    align: pick('align', ['start', 'center', 'end']),
+    gap: num(raw.gap, 0, 20),
+    timesGap: num(raw.timesGap, 0, 20),
+    divider: Boolean(raw.divider),
+    showWhen: raw.showWhen !== false,
+  };
 }
 
 async function mountLogo(body, widget, ctx) {
