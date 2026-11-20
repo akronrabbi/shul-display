@@ -1277,3 +1277,6 @@ body.is-dragging .screen-canvas::after { opacity: 1; }
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
 }
+
+.album-status[data-kind="error"] { color: var(--ui-bad); }
+.album-link .btn { margin: 4px 6px 4px 0; }

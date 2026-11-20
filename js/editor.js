@@ -8,11 +8,13 @@ import { classifyImageList, PHOTOS_HELP } from './images.js';
 import { explainDriveError, listDriveFolderImages } from './drive.js';
 import { inDateRange, isCurrentEvent } from './events.js';
 import { readTvStatus } from './cloud.js';
+import { cleanAlbumLink } from './albums.js';
 import { TEMPLATES, applyTemplate } from './templates.js';
 import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosAccount, photosConnected, photosRemembered, pickPhotos } from './gphotos.js';
 import {
   PHOTO_TRANSITIONS,
   WIDGET_TYPES,
+  readAlbumList,
   defaultSettings,
   mountWidget,
   photoTransition,
@@ -1276,6 +1278,7 @@ function buildEventsForm(settings, host = inspector, refresh = () => refreshWidg
 
 function buildPhotosForm(settings) {
   inspector.append(el('p', 'note', PHOTOS_HELP));
+  buildAlbumLink(settings);
   buildGooglePhotos(settings);
   buildLibrary(settings);
   const list = el('div');
@@ -1329,12 +1332,14 @@ function buildPhotosForm(settings) {
   const addLinks = actionButton('Add the links', () => {
     const { images, errors } = classifyImageList(links.value);
     settings.images.push(...images);
+    const album = errors.map((item) => cleanAlbumLink(item.raw)).find(Boolean);
+    if (album) settings.albumLink = album;
     links.value = '';
     markDirty();
     refreshWidget(selectedId);
     buildInspector();
-    if (errors.some((item) => item.error === 'photos-album')) {
-      inspector.prepend(el('p', 'warn', 'A Google Photos album link was skipped. ' + PHOTOS_HELP));
+    if (album) {
+      setStatus('That was a Google Photos album link, so it is now the album for this piece. Press Save.', 'dirty');
     } else if (errors.length) {
       inspector.prepend(el('p', 'warn', 'One of those lines was not an image address, so it was skipped.'));
     }
@@ -1400,6 +1405,74 @@ function buildPhotosForm(settings) {
 }
 
 let editingClientId = false;
+
+// A Google Photos album shared by link. Add photos to that album on a phone,
+// and the TV follows: a GitHub job reads the album every 15 minutes or so.
+function buildAlbumLink(settings) {
+  const box = el('div', 'gphotos album-link');
+  box.append(el('strong', '', 'Google Photos album (updates on its own)'));
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'https://photos.app.goo.gl/...';
+  input.spellcheck = false;
+  input.value = settings.albumLink || '';
+  const say = el('p', 'note album-status', '');
+  const use = actionButton(settings.albumLink ? 'Update the link' : 'Use this album', () => {
+    const clean = cleanAlbumLink(input.value);
+    if (input.value.trim() && !clean) {
+      say.textContent = 'That is not a Google Photos album link. In Google Photos, open the album, press Share, then Create link (or Copy link), and paste it here.';
+      say.dataset.kind = 'error';
+      return;
+    }
+    settings.albumLink = clean;
+    markDirty();
+    refreshWidget(selectedId);
+    buildInspector();
+    setStatus(clean ? 'Album link added. Press Save; the TV shows the album after its first check, within about 15 to 30 minutes.' : 'Album link removed. Press Save.', 'dirty');
+  });
+  box.append(field('Album link', input), use);
+  if (settings.albumLink) {
+    const remove = actionButton('Stop using this album', () => {
+      settings.albumLink = '';
+      markDirty();
+      refreshWidget(selectedId);
+      buildInspector();
+    });
+    remove.classList.add('btn-quiet');
+    box.append(remove);
+    say.textContent = 'Looking for the last check...';
+    readAlbumList(settings.albumLink).then((album) => {
+      if (!album) {
+        say.textContent = 'Not checked yet. After you Save, the first check runs within about 15 to 30 minutes. Then this says how many photos were found.';
+        return;
+      }
+      const when = stamp(album.checkedAt);
+      if (album.ok === false) {
+        say.dataset.kind = 'error';
+        say.textContent = `${album.photos?.length ? `Showing the last ${album.photos.length} photos found. ` : ''}The last check (${when}) could not read the album: ${album.error || 'unknown reason'}. Make sure it is shared by link.`;
+        return;
+      }
+      say.textContent = `${album.title ? `"${album.title}": ` : ''}${album.photos.length} photo${album.photos.length === 1 ? '' : 's'}, checked ${when}. New photos added to the album show up after the next check.`;
+    });
+  }
+  box.append(say);
+  const steps = document.createElement('details');
+  steps.className = 'key-steps';
+  steps.open = !settings.albumLink;
+  const summary = document.createElement('summary');
+  summary.textContent = 'How to get the album link';
+  const list = el('ol', 'note');
+  [
+    'In Google Photos (phone or computer), make an album just for the TV, for example "Shul TV".',
+    'Open the album and press Share (the arrow or the person-plus icon).',
+    'Choose Create link, or Copy link. On a computer, you can also turn on Link sharing.',
+    'Paste the link here and press Use this album, then Save.',
+    'From then on, add or remove photos in that album. The TV follows within about 15 to 30 minutes.',
+  ].forEach((line) => list.append(el('li', '', line)));
+  steps.append(summary, list, el('p', 'note', 'Anyone who has the link can see the album, so keep it to photos meant for the lobby. Google does not officially support reading albums this way; if Google changes its pages, the TV keeps the last photos it found until it is fixed.'));
+  box.append(steps);
+  inspector.append(box);
+}
 
 function addToLibrary(entry) {
   if (!Array.isArray(state.library)) state.library = [];

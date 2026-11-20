@@ -11,6 +11,7 @@
     import { createCalendar, akronWallTimeToDate } from '../js/calendar.js';
     import { isCurrentEvent, inDateRange, nextOccurrence, upcomingEvents } from '../js/events.js';
     import { TEMPLATES } from '../js/templates.js';
+    import { albumKey, cleanAlbumLink, parseAlbumPage, albumLinksInBoard } from '../js/albums.js';
     import { canonicalFont, extraFontsUsed } from '../js/type.js';
     import { classifyImageLine } from '../js/images.js';
     import { normalizeConfig, pickTv } from '../js/model.js';
@@ -117,6 +118,15 @@
     check('shabbos mode kept', modern.tvs[0].shabbosMode.enabled && modern.tvs[0].shabbosMode.screenId === 'main');
     check('google kept', modern.google.photosClientId === 'x.apps.googleusercontent.com');
     check('fade default', modern.tvs[0].transition === 'fade');
+
+    // Google Photos album links.
+    check('album short link', cleanAlbumLink(' https://photos.app.goo.gl/AbC123?x=1 ') === 'https://photos.app.goo.gl/AbC123');
+    check('album share link', cleanAlbumLink('https://photos.google.com/share/AF1Qip?key=abc') === 'https://photos.google.com/share/AF1Qip?key=abc');
+    check('not an album', cleanAlbumLink('https://example.com/x') === '');
+    check('album key stable', albumKey('https://photos.app.goo.gl/AbC123') === albumKey('https://photos.app.goo.gl/AbC123?y') && albumKey('https://photos.app.goo.gl/AbC123').length === 16);
+    const sample = parseAlbumPage('<meta property="og:title" content="TV &amp; Lobby">["https://lh3.googleusercontent.com/pw/AP1",400,300,null]["https://lh3.googleusercontent.com/a/OWNER",96,96]["https://lh3.googleusercontent.com/pw/AP1",400,300]');
+    check('album parse', sample.title === 'TV & Lobby' && sample.photos.length === 1 && sample.photos[0].w === 400);
+    check('album links on board', albumLinksInBoard({ tvs: [{ screens: [{ widgets: [{ type: 'photos', settings: { albumLink: 'https://photos.app.goo.gl/Z9' } }] }] }] }).length === 1);
 
     const folder = 'https://drive.google.com/drive/u/0/folders/1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd?usp=sharing';
     check('folder id', parseDriveFolderId(folder) === '1Tep1UDuT2HOGwzOWKeWkM_TevH3D5gSd');
