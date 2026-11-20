@@ -3,6 +3,22 @@ import { fixedSize, stylePart } from './type.js';
 import { upcomingEvents, formatClockNumbers, eventDateParts, isCurrentEvent } from './events.js';
 import { safeImageUrl, PHOTOS_HELP } from './images.js';
 import { driveRefreshMs, explainDriveError, listDriveFolderImages } from './drive.js';
+import { albumKey, albumPhotoUrl, cleanAlbumLink } from './albums.js';
+
+// The photo list for a Google Photos album link, published with the site by
+// the scheduled GitHub job. Null until the first check has run.
+export async function readAlbumList(link) {
+  const clean = cleanAlbumLink(link);
+  if (!clean) return null;
+  try {
+    const url = new URL(`../albums/${albumKey(clean)}.json`, import.meta.url);
+    url.searchParams.set('t', String(Math.floor(Date.now() / 60000)));
+    const response = await fetch(url, { cache: 'no-store' });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
+  }
+}
 
 export { PHOTOS_HELP };
 
@@ -128,6 +144,7 @@ export function defaultSettings(type) {
         fit: 'cover',
         driveFolder: '',
         driveApiKey: '',
+        albumLink: '',
       };
     case 'pdf':
       return { tone: 'ivory', assetId: null, url: '', interval: 12 };
@@ -479,6 +496,15 @@ async function collectPhotoUrls(settings, ctx) {
     const url = image.assetId ? await ctx.resolveAsset(image.assetId) : safeImageUrl(image.url);
     if (url) urls.push(url);
   }
+  let albumNote = '';
+  if (cleanAlbumLink(settings.albumLink)) {
+    const album = await readAlbumList(settings.albumLink);
+    if (album?.photos?.length) {
+      for (const photo of album.photos) urls.push(albumPhotoUrl(photo.url));
+    } else {
+      albumNote = 'The Google Photos album will show here after its first check, within about 15 to 30 minutes of saving.';
+    }
+  }
   let driveError = null;
   if (String(settings.driveFolder || '').trim()) {
     try {
@@ -488,7 +514,7 @@ async function collectPhotoUrls(settings, ctx) {
       driveError = error;
     }
   }
-  return { urls, driveError };
+  return { urls, driveError, albumNote };
 }
 
 export const PHOTO_TRANSITIONS = [
@@ -616,14 +642,15 @@ async function mountPhotos(body, widget, ctx) {
     urls.splice(0, urls.length, ...list);
     if (!urls.length) {
       note.hidden = false;
-      if (found.driveError) note.textContent = explainDriveError(found.driveError);
+      if (found.albumNote) note.textContent = found.albumNote;
+      else if (found.driveError) note.textContent = explainDriveError(found.driveError);
       else if (String(settings.driveFolder || '').trim()) note.textContent = 'That folder has no pictures yet.';
       else note.textContent = 'Add photos in the editor.';
     }
     show();
   };
   await reload();
-  if (String(settings.driveFolder || '').trim()) {
+  if (String(settings.driveFolder || '').trim() || cleanAlbumLink(settings.albumLink)) {
     every(driveRefreshMs(), () => { reload(); }, bag);
   }
   return () => bag.forEach((fn) => fn());

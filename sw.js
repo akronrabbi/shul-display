@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v8';
+const CACHE = 'shul-display-v9';
 const FILES = [
   './',
   './index.html',
@@ -23,6 +23,7 @@ const FILES = [
   './js/editor.js',
   './js/templates.js',
   './js/gphotos.js',
+  './js/albums.js',
   './vendor/fonts/fonts.css',
   './vendor/fonts/files/inter-latin-wght-normal.woff2',
   './vendor/fonts/files/heebo-hebrew-wght-normal.woff2',

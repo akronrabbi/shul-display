@@ -47,4 +47,4 @@ export function classifyImageList(text) {
 }
 
 export const PHOTOS_HELP =
-  'Upload pictures, choose them from Google Photos (an album too), paste image addresses, or point this piece at a Google Drive folder. A Google Photos album link pasted as text cannot be read, so use the Google Photos button below instead.';
+  'Show a Google Photos album that updates on its own, copy in photos from Google Photos, upload pictures, paste image addresses, or point this piece at a Google Drive folder.';

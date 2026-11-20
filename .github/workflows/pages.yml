@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Re-reads Google Photos album links every 15 minutes (GitHub may run it later).
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: read
@@ -23,10 +26,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Read Google Photos albums
+        id: albums
+        run: node scripts/fetch-albums.mjs
       - name: Upload site
+        if: github.event_name != 'schedule' || steps.albums.outputs.changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
       - name: Deploy
+        if: github.event_name != 'schedule' || steps.albums.outputs.changed == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
