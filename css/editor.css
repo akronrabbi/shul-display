@@ -1295,3 +1295,37 @@ body.is-dragging .screen-canvas::after { opacity: 1; }
 details.photo-section > summary.photo-section-title { cursor: pointer; }
 .photo-section .gphotos { margin-top: 10px; }
 .thumb-name { flex: 1; min-width: 0; font-size: 12px; color: var(--ui-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 8px 0;
+  padding: 18px 12px;
+  border: 2px dashed var(--ui-line-strong);
+  border-radius: 12px;
+  background: var(--ui-panel);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.drop-zone strong { font-size: 13.5px; }
+.drop-zone span { font-size: 12px; color: var(--ui-muted); }
+.drop-zone:hover, .drop-zone:focus-visible { border-color: var(--ui-accent); }
+.drop-zone.over { border-color: var(--ui-accent); background: var(--ui-accent-soft); }
+.screen-canvas .widget.drop-over { outline: 3px dashed #4c8dff; outline-offset: -3px; }
+.screen-canvas .widget.drop-over::after {
+  content: "Drop to add to this slideshow";
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 650 14px/1.2 var(--ui-font);
+  color: #fff;
+  background: rgba(29, 53, 87, 0.6);
+  pointer-events: none;
+}
