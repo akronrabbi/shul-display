@@ -629,3 +629,14 @@
   height: 100%;
 }
 .takeover-image .empty-note { color: #fff; }
+
+.photos .photo-back {
+  position: absolute;
+  inset: -6%;
+  background: center / cover no-repeat;
+  filter: blur(40px) brightness(0.55) saturate(1.2);
+  transform: scale(1.1);
+  transition: background-image 1s ease;
+}
+.takeover-slides { position: absolute; inset: 0; }
+.takeover-slides .photos { background: #000; }

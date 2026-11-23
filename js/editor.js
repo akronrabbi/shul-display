@@ -2799,46 +2799,81 @@ function buildTakeoverForm() {
   inspector.append(field('What to show', kindRow));
 
   if (isImage) {
-    const thumb = el('div', 'takeover-thumb');
-    if (takeover.imageUrl) {
-      const img = document.createElement('img');
-      img.alt = '';
-      img.src = takeover.imageUrl;
-      thumb.append(img);
-    } else {
-      thumb.append(el('span', 'note', 'No picture yet'));
-    }
-    inspector.append(thumb);
-    inspector.append(fileButton(takeover.imageUrl ? 'Replace the picture' : 'Upload a picture', 'image/*', async (file) => {
-      setStatus('Uploading the picture...', 'busy');
-      const uploaded = await storeFile(file);
-      if (!uploaded) return;
-      takeover.imageUrl = uploaded.url;
+    if (!Array.isArray(takeover.images)) takeover.images = [];
+    const pics = takeover.images;
+    const changed = () => {
       markDirty();
       renderCanvas();
       buildInspector();
+    };
+    inspector.append(choiceRow('Fit', takeover.imageFit === 'cover' ? 'cover' : 'contain', [
+      ['contain', 'Show the whole picture'],
+      ['cover', 'Fill the screen'],
+    ], (value) => {
+      takeover.imageFit = value;
+      markDirty();
+      renderCanvas();
     }));
+    inspector.append(el('p', 'note', takeover.imageFit === 'cover'
+      ? 'Fill the screen: edge to edge. Parts of a picture that is not the shape of the TV are cut off.'
+      : 'Show the whole picture: nothing is cut off. Any space left over is filled with a soft, blurred copy of the picture.'));
+
+    const list = section(`Pictures (${pics.length})`);
+    if (!pics.length) list.append(el('p', 'note', 'None yet. Add some below, or tap pictures in the Photo library.'));
+    pics.forEach((image, index) => {
+      const row = el('div', 'thumb');
+      const img = document.createElement('img');
+      img.alt = '';
+      img.referrerPolicy = 'no-referrer';
+      img.src = image.url;
+      row.append(img, el('span', 'thumb-name', image.name || `Picture ${index + 1}`));
+      if (index > 0) {
+        const up = actionButton('\u2191', () => {
+          pics.splice(index - 1, 0, pics.splice(index, 1)[0]);
+          changed();
+        });
+        up.title = 'Show earlier';
+        up.setAttribute('aria-label', 'Show earlier');
+        row.append(up);
+      }
+      row.append(actionButton('Remove', () => {
+        pics.splice(index, 1);
+        changed();
+      }));
+      list.append(row);
+    });
+    if (pics.length > 1) {
+      list.append(tapTwice(`Remove all ${pics.length} pictures`, 'Tap again to remove them all', () => {
+        pics.splice(0, pics.length);
+        changed();
+      }));
+    }
+
+    const add = section('Add pictures');
+    add.append(dropZone('Drop pictures here to add them', 'or click to choose them', (files) => uploadPictures(files, takeover, null).then(() => renderCanvas())));
+    buildLibrary(takeover, add);
     const link = document.createElement('input');
     link.type = 'text';
-    link.placeholder = 'Or paste a picture address or Google Drive file link';
+    link.placeholder = 'A picture address or Google Drive file link';
     link.spellcheck = false;
-    const useLink = actionButton('Use this link', () => {
+    const useLink = actionButton('Add this link', () => {
       const found = classifyImageList(link.value).images[0];
       if (!found) {
         setStatus('That link is not a picture address this page can show.', 'error');
         return;
       }
-      takeover.imageUrl = found.url;
-      markDirty();
-      renderCanvas();
-      buildInspector();
+      pics.push(found);
+      changed();
     });
-    inspector.append(field('Picture link', link), useLink);
-    inspector.append(field('Fit', selectInput(takeover.imageFit || 'contain', [
-      ['contain', 'Show the whole picture (soft blurred edges)'],
-      ['cover', 'Fill the screen (edges may be cropped)'],
-    ], (value) => { takeover.imageFit = value; redraw(); })));
-    inspector.append(el('p', 'note', 'Tip: a flyer made for a TV is 1920 by 1080 pixels (or 1080 by 1920 on a tall screen), so it fills the screen exactly.'));
+    add.append(field('Picture link', link), useLink);
+
+    if (pics.length > 1) {
+      const show = section('Slideshow');
+      show.append(field('Seconds on each picture', numberInput(takeover.interval || 10, (value) => { takeover.interval = Math.max(2, Number(value) || 10); renderCanvas(); })));
+      show.append(field('Movement between pictures', selectInput(takeover.transition || 'fade', PHOTO_TRANSITIONS, (value) => { takeover.transition = value; renderCanvas(); })));
+      show.append(field('Order', selectInput(takeover.order || 'in-order', [['in-order', 'In order'], ['shuffle', 'Shuffle']], (value) => { takeover.order = value; renderCanvas(); })));
+    }
+    inspector.append(el('p', 'note', 'Tip: a flyer made for a TV is 1920 by 1080 pixels (or 1080 by 1920 on a tall screen), so it fills the screen exactly either way.'));
   } else {
     inspector.append(field('Small line', textInput(takeover.eyebrow, (value) => { takeover.eyebrow = value; redraw(); })));
     inspector.append(richField('Main message', takeover, 'title', { refresh: redraw }));
