@@ -1514,3 +1514,21 @@ details.photo-section > summary.photo-section-title { cursor: pointer; }
   #email-start { min-height: 0; border: 0; padding: 4px 0; background: none; color: var(--ui-accent); text-decoration: underline; font-weight: 500; width: auto !important; align-self: flex-start; }
   .signin .auth-message:empty { display: none; }
 }
+
+.cover-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e7b6b1;
+  background: var(--ui-bad-soft);
+  color: #7a1c15;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.cover-warning span { flex: 1 1 260px; font-weight: 550; }
+.cover-warning.later { border-color: #e6c48f; background: var(--ui-warn-soft); color: #5c3b00; }
+.cover-warning[hidden] { display: none; }
