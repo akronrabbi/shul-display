@@ -513,7 +513,7 @@ async function collectPhotoUrls(settings, ctx) {
     if (album?.photos?.length) {
       for (const photo of album.photos) urls.push(albumPhotoUrl(photo.url));
     } else {
-      albumNote = 'The Google Photos album will show here after its first check, within about 15 to 30 minutes of saving.';
+      albumNote = 'The Google Photos album will show here after its first check. In the editor, press Check the album now.';
     }
   }
   let driveError = null;

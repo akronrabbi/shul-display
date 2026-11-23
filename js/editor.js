@@ -15,6 +15,7 @@ import { connectPhotos, disconnectPhotos, downloadPhoto, endPickSession, photosA
 import {
   PHOTO_TRANSITIONS,
   WIDGET_TYPES,
+  takeoverActive,
   readAlbumList,
   defaultSettings,
   mountWidget,
@@ -1789,7 +1790,7 @@ function dropZone(title, hint, onFiles) {
 }
 
 // A Google Photos album shared by link. Add photos to that album on a phone,
-// and the TV follows: a GitHub job reads the album every 15 minutes or so.
+// and the TV follows after the next check by the GitHub job (scripts/fetch-albums.mjs).
 function buildAlbumLink(settings, host = inspector) {
   const box = el('div', 'gphotos album-link');
   box.append(el('p', 'note', 'Paste a shared album link. Add photos to the album on your phone, and the TV follows on its own.'));
@@ -1810,7 +1811,7 @@ function buildAlbumLink(settings, host = inspector) {
     markDirty();
     refreshWidget(selectedId);
     buildInspector();
-    setStatus(clean ? 'Album link added. Press Save; the TV shows the album after its first check, within about 15 to 30 minutes.' : 'Album link removed. Press Save.', 'dirty');
+    setStatus(clean ? 'Album link added. Press Save, then Check the album now (below) so the TV gets the photos right away.' : 'Album link removed. Press Save.', 'dirty');
   });
   box.append(field('Album link', input), use);
   if (settings.albumLink) {
@@ -1825,7 +1826,7 @@ function buildAlbumLink(settings, host = inspector) {
     say.textContent = 'Looking for the last check...';
     readAlbumList(settings.albumLink).then((album) => {
       if (!album) {
-        say.textContent = 'Not checked yet. After you Save, the first check runs within about 15 to 30 minutes. Then this says how many photos were found.';
+        say.textContent = 'Not checked yet. After you Save, press Check the album now below. Then this says how many photos were found.';
         return;
       }
       const when = stamp(album.checkedAt);
@@ -1834,10 +1835,20 @@ function buildAlbumLink(settings, host = inspector) {
         say.textContent = `${album.photos?.length ? `Showing the last ${album.photos.length} photos found. ` : ''}The last check (${when}) could not read the album: ${album.error || 'unknown reason'}. Make sure it is shared by link.`;
         return;
       }
-      say.textContent = `${album.title ? `"${album.title}": ` : ''}${album.photos.length} photo${album.photos.length === 1 ? '' : 's'}, checked ${when}. New photos added to the album show up after the next check.`;
+      say.textContent = `${album.title ? `"${album.title}": ` : ''}${album.photos.length} photo${album.photos.length === 1 ? '' : 's'}, checked ${when}. New photos added to the album show up after the next check (every few hours, or right away with Check the album now).`;
     });
   }
   box.append(say);
+  if (settings.albumLink) {
+    // GitHub runs its free timer only every few hours. One click on its page checks now.
+    const now = document.createElement('a');
+    now.className = 'btn';
+    now.href = 'https://github.com/akronrabbi/shul-display/actions/workflows/pages.yml';
+    now.target = '_blank';
+    now.rel = 'noopener';
+    now.textContent = 'Check the album now';
+    box.append(now, el('p', 'note', 'Opens the site\'s GitHub page. Sign in to GitHub, press Run workflow, then Run workflow again. In about a minute the TV has the album\'s latest photos. Save first if you just changed the link.'));
+  }
   const steps = document.createElement('details');
   steps.className = 'key-steps';
   steps.open = !settings.albumLink;
@@ -1849,7 +1860,7 @@ function buildAlbumLink(settings, host = inspector) {
     'Open the album and press Share (the arrow or the person-plus icon).',
     'Choose Create link, or Copy link. On a computer, you can also turn on Link sharing.',
     'Paste the link here and press Use this album, then Save.',
-    'From then on, add or remove photos in that album. The TV follows within about 15 to 30 minutes.',
+    'From then on, add or remove photos in that album. GitHub checks it on its own every few hours; for sooner, press Check the album now.',
   ].forEach((line) => list.append(el('li', '', line)));
   steps.append(summary, list, el('p', 'note', 'Anyone who has the link can see the album, so keep it to photos meant for the lobby. Google does not officially support reading albums this way; if Google changes its pages, the TV keeps the last photos it found until it is fixed.'));
   box.append(steps);
@@ -2766,11 +2777,11 @@ function buildTakeoverForm() {
   const isImage = takeover.kind === 'image';
   inspector.append(el('h2', 'side-title', 'Full screen'));
   inspector.append(el('p', 'hint', 'Covers the whole screen of the TV you are editing, for example a simcha in the social hall. The preview shows what it will look like.'));
-  const enabled = checkInput(takeover.enabled, 'Show it on this TV', (value) => { takeover.enabled = value; redraw(); });
+  const enabled = checkInput(takeover.enabled, 'Show it on this TV', (value) => { takeover.enabled = value; paintCoverWarning(); redraw(); buildInspector(); });
   enabled.classList.add('big-check');
   inspector.append(enabled);
-  inspector.append(el('p', 'note', takeover.enabled
-    ? 'On. After you Save, this TV shows it instead of its screens.'
+  inspector.append(el('p', takeover.enabled ? 'warn' : 'note', takeover.enabled
+    ? `On. After you Save, this TV shows only this${takeover.scheduleEnabled ? ' between the start and end below' : ', with no end, until it is turned off'}. Changes to the screens will not show on the TV while it is on.`
     : 'Off. You can set it up and look at it here first. Turn it on and Save when it should show.'));
 
   const kindRow = el('div', 'ground-row');
@@ -3070,7 +3081,45 @@ async function refreshTvStatus() {
   paintTvStatus();
 }
 
+// When the full-screen message or picture is on, the TV shows only that, so
+// changes to the screens cannot be seen there. Say so plainly, with a way out.
+function coverState(board = tv()) {
+  const takeover = board.takeover || {};
+  if (!takeover.enabled) return null;
+  const what = takeover.kind === 'image' ? 'full-screen picture' : 'full-screen message';
+  if (takeoverActive(takeover, new Date())) return { now: true, what };
+  if (takeover.scheduleEnabled && takeover.start && takeoverActive({ ...takeover, start: '' }, new Date())) return { now: false, what, start: takeover.start };
+  return null;
+}
+
+function paintCoverWarning() {
+  const box = document.getElementById('cover-warning');
+  if (!box) return;
+  const cover = coverState();
+  box.replaceChildren();
+  if (!cover) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  box.classList.toggle('later', !cover.now);
+  const when = cover.now ? '' : new Date(cover.start).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  box.append(el('span', '', cover.now
+    ? `The ${cover.what} is on for ${tv().name || 'this TV'}. The TV shows only that, so changes to the screens will not show there until it is turned off.`
+    : `The ${cover.what} will cover ${tv().name || 'this TV'} starting ${when}.`));
+  const off = actionButton('Turn it off', () => {
+    tv().takeover.enabled = false;
+    markDirty();
+    paintChrome();
+    if (mode === 'takeover') buildInspector();
+    setStatus('Full screen is off. Press Save, and the TV shows your screens again.', 'dirty');
+  });
+  off.classList.add('btn-primary');
+  box.append(off, actionButton('Open full screen', () => openMode('takeover')));
+}
+
 function paintChrome() {
+  paintCoverWarning();
   paintTvBar();
   document.getElementById('orient-land').classList.toggle('on', tv().orientation === 'landscape');
   document.getElementById('orient-port').classList.toggle('on', tv().orientation === 'portrait');
@@ -3251,6 +3300,12 @@ async function save() {
       hasLocal = true;
       clearUnsaved();
       const drafts = tv().screens.filter((item) => item.draft).length;
+      const covered = state.tvs.filter((item) => coverState(item)?.now).map((item) => item.name || item.id);
+      if (covered.length) {
+        setStatus(`Saved. Note: the full screen is on for ${covered.join(' and ')}, so that TV shows only the full screen.`, 'error');
+        paintCoverWarning();
+        return;
+      }
       setStatus(drafts ? `Saved. The TV updates within a minute. ${drafts} draft screen${drafts === 1 ? ' is' : 's are'} kept but not shown.` : 'Saved. The TV updates within a minute.', 'saved');
       return;
     }
