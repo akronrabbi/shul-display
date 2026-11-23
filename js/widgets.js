@@ -196,7 +196,9 @@ export function defaultTakeover() {
     backgroundUrl: '',
     kind: 'message',
     imageUrl: '',
+    images: [],
     imageFit: 'contain',
+    interval: 10,
     scheduleEnabled: false,
     start: '',
     end: '',
@@ -586,6 +588,9 @@ async function mountPhotos(body, widget, ctx) {
     img.decoding = 'async';
     img.style.objectFit = fit;
   }
+  // Whole pictures on a soft, blurred copy of themselves, so any shape fills the box.
+  const back = settings.blurBack && fit === 'contain' ? h('div', 'photo-back') : null;
+  if (back) root.append(back);
   root.append(a, b, note);
   if (settings.caption) root.append(piece('caption', settings.caption, settings.type, 'small'));
   body.append(root);
@@ -598,6 +603,7 @@ async function mountPhotos(body, widget, ctx) {
   bag.push(() => { alive = false; });
 
   const enter = (next, previous) => {
+    if (back) back.style.backgroundImage = `url("${String(next.src).replace(/"/g, '')}")`;
     next.classList.add('instant');
     next.classList.remove('on', 'leaving');
     void next.offsetWidth;
@@ -938,34 +944,47 @@ export function takeoverActive(takeover, now, force) {
 
 // A full-screen picture: one image over the whole TV. "Show the whole picture"
 // puts a soft, blurred copy behind it so a flyer of any shape fills the screen.
-function renderTakeoverImage(host, takeover) {
+// The pictures of a full-screen picture: the list, or the single picture
+// saved by earlier versions.
+export function takeoverImages(takeover) {
+  const list = (takeover?.images || []).filter((image) => safeImageUrl(image?.url));
+  if (list.length) return list;
+  return safeImageUrl(takeover?.imageUrl) ? [{ url: takeover.imageUrl }] : [];
+}
+
+async function renderTakeoverImage(host, takeover, ctx) {
   const root = h('div', 'takeover takeover-image');
-  const url = safeImageUrl(takeover.imageUrl);
-  if (!url) {
-    root.append(h('div', 'empty-note', 'Add a picture in the editor.'));
+  const images = takeoverImages(takeover);
+  if (!images.length) {
+    root.append(h('div', 'empty-note', 'Add pictures in the editor.'));
     host.append(root);
     return () => host.replaceChildren();
   }
   const fit = takeover.imageFit === 'cover' ? 'cover' : 'contain';
   root.dataset.fit = fit;
-  if (fit === 'contain') {
-    const back = h('div', 'takeover-image-back');
-    back.style.backgroundImage = `url("${url.replace(/"/g, '')}")`;
-    root.append(back);
-  }
-  const img = h('img', 'takeover-image-main');
-  img.alt = '';
-  img.referrerPolicy = 'no-referrer';
-  img.src = url;
-  img.style.objectFit = fit;
-  root.append(img);
+  const body = h('div', 'takeover-slides');
+  root.append(body);
   host.append(root);
-  return () => host.replaceChildren();
+  const dispose = await mountPhotos(body, {
+    settings: {
+      tone: 'clear',
+      images,
+      fit,
+      blurBack: true,
+      interval: Number(takeover.interval) || 10,
+      transition: takeover.transition || 'fade',
+      order: takeover.order || 'in-order',
+    },
+  }, ctx);
+  return () => {
+    dispose();
+    host.replaceChildren();
+  };
 }
 
 export async function renderTakeover(host, takeover, ctx) {
   host.replaceChildren();
-  if (takeover.kind === 'image') return renderTakeoverImage(host, takeover);
+  if (takeover.kind === 'image') return renderTakeoverImage(host, takeover, ctx);
   const template = takeover.template || 'classic';
   const root = h('div', `takeover takeover-${template}`);
   let background = '';

@@ -61,6 +61,11 @@ export function normalizeTv(tv, fallbackName) {
     next.liveScreen = shown.includes(guess) ? guess : (shown[0] || ids[0]);
   }
   next.takeover = { ...defaultTakeover(), ...(next.takeover || {}) };
+  if (!Array.isArray(next.takeover.images)) next.takeover.images = [];
+  if (!next.takeover.images.length && next.takeover.imageUrl) {
+    next.takeover.images = [{ url: next.takeover.imageUrl, name: 'Full-screen picture' }];
+    next.takeover.imageUrl = '';
+  }
   next.theme = normalizeTheme(next.theme);
   next.transition = SCREEN_TRANSITIONS.some(([id]) => id === next.transition) ? next.transition : 'fade';
   next.shabbosMode = normalizeShabbosMode(next.shabbosMode, next.screens);
@@ -128,6 +133,9 @@ export function normalizeConfig(config) {
       }
     }
     if (tv.takeover?.imageUrl) used.push({ url: tv.takeover.imageUrl, name: 'Full-screen picture', from: 'upload' });
+    for (const image of tv.takeover?.images || []) {
+      if (image?.url) used.push({ url: image.url, name: image.name || 'Full-screen picture', from: 'upload' });
+    }
     if (tv.takeover?.backgroundUrl) used.push({ url: tv.takeover.backgroundUrl, name: 'Full-screen background', from: 'upload' });
   }
   const seen = new Set();
