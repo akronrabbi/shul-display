@@ -17,10 +17,13 @@ const BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 async function readBoard() {
   try {
     const pass = await (await fetch(`${AUTH_URL}/token/anonymous`)).json();
-    const rows = await (await fetch(`${DATA_API}/boards?id=eq.main&select=config`, {
+    const rows = await (await fetch(`${DATA_API}/boards?id=eq.main&select=config,updated_at`, {
       headers: { Authorization: `Bearer ${pass.token}` },
     })).json();
-    if (rows?.[0]?.config) return rows[0].config;
+    if (rows?.[0]?.config) {
+      console.log(`Online board last saved: ${rows[0].updated_at}`);
+      return rows[0].config;
+    }
   } catch (error) {
     console.log('Online board could not be read:', error.message);
   }
@@ -48,6 +51,16 @@ async function readAlbum(link) {
 }
 
 const board = await readBoard();
+// A short summary of what each TV should be showing, for checking from the job log.
+for (const tv of board?.tvs || []) {
+  const live = (tv.screens || []).find((screen) => screen.id === tv.liveScreen);
+  const takeover = tv.takeover?.enabled ? ` | FULL SCREEN ON (${tv.takeover.kind || 'message'}${tv.takeover.scheduleEnabled ? `, ${tv.takeover.start || '?'} to ${tv.takeover.end || '?'}` : ''})` : '';
+  const shabbos = tv.shabbosMode?.enabled ? ` | Shabbos mode on (screen ${tv.shabbosMode.screenId})` : '';
+  console.log(`TV "${tv.name}" (${tv.id}): cycle=${Boolean(tv.cycleScreens)} | on TV: ${live ? `"${live.name}"` : `(none set; editor tab ${tv.activeScreen})`}${takeover}${shabbos}`);
+  for (const screen of tv.screens || []) {
+    console.log(`   screen "${screen.name}" (${screen.id}): ${(screen.widgets || []).length} pieces${screen.draft ? ' | DRAFT (never shown)' : ''}`);
+  }
+}
 const links = albumLinksInBoard(board);
 console.log(`Album links on the board: ${links.length}`);
 await mkdir(OUT, { recursive: true });
