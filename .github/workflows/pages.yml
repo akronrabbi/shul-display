@@ -38,6 +38,9 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      - name: Wait for the Pages artifact
+        if: github.event_name != 'schedule' || steps.albums.outputs.changed == 'true'
+        run: sleep 20
       - name: Deploy
         if: github.event_name != 'schedule' || steps.albums.outputs.changed == 'true'
         id: deployment
