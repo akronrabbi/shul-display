@@ -229,7 +229,12 @@ function piece(className, text, type, part) {
   return node;
 }
 
+function publicPhone() {
+  return document.body.classList.contains('public-view') && window.matchMedia('(max-width: 640px)').matches;
+}
+
 function fitBox(el, box, options = {}) {
+  if (publicPhone()) return;
   if (!el || !box || box.clientHeight < 8) return;
   const line = options.line === true;
   el.style.whiteSpace = line ? 'nowrap' : 'normal';
@@ -727,8 +732,11 @@ async function mountPdf(body, widget, ctx) {
       const page = await pdf.getPage(pageNum);
       const unscaled = page.getViewport({ scale: 1 });
       const cssW = root.clientWidth || unscaled.width;
-      const cssH = root.clientHeight || unscaled.height;
-      const scale = Math.min(cssW / unscaled.width, cssH / unscaled.height);
+      const phone = publicPhone();
+      const cssH = phone ? cssW : (root.clientHeight || unscaled.height);
+      const scale = phone
+        ? cssW / unscaled.width
+        : Math.min(cssW / unscaled.width, cssH / unscaled.height);
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const viewport = page.getViewport({ scale: scale * dpr });
       canvas.width = Math.floor(viewport.width);

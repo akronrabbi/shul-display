@@ -1,4 +1,4 @@
-const CACHE = 'shul-display-v10';
+const CACHE = 'shul-display-v11';
 const FILES = [
   './',
   './index.html',

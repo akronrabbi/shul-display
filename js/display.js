@@ -125,9 +125,20 @@ function placeOf(widget, orientation) {
 
 let layer = null;
 
+function publicPhone() {
+  return publicMode && window.matchMedia('(max-width: 640px)').matches;
+}
+
 function buildShells(host, widgets, orientation) {
   const shells = [];
-  for (const widget of widgets) {
+  const ordered = publicPhone()
+    ? [...widgets].sort((a, b) => {
+      const pa = placeOf(a, 'portrait');
+      const pb = placeOf(b, 'portrait');
+      return pa.y - pb.y || pa.x - pb.x;
+    })
+    : widgets;
+  for (const widget of ordered) {
     const shell = document.createElement('div');
     const place = placeOf(widget, orientation);
     shell.className = `widget tone-${widget.settings?.tone || 'ivory'}`;
@@ -227,7 +238,18 @@ async function paint() {
   stage.querySelectorAll('.boot-error').forEach((node) => node.remove());
   swapLayer(next, nextDisposers, current.transition || 'fade');
   paintSwitcher();
+  reportEmbedHeight();
   window.__ready = true;
+}
+
+function reportEmbedHeight() {
+  if (!publicMode || params.get('embed') !== '1' || window.parent === window) return;
+  const height = Math.ceil(document.documentElement.scrollHeight);
+  try {
+    parent.postMessage({ source: 'shul-display', type: 'shul-display-height', height }, '*');
+  } catch {
+    // A parent that cannot be reached simply ignores the size.
+  }
 }
 
 function usingLocal() {
@@ -444,6 +466,18 @@ if (!publicMode) {
   setInterval(heartbeat, 60000);
   setTimeout(heartbeat, 8000);
   setInterval(nightlyRefresh, 60000);
+}
+if (publicMode) {
+  const layout = window.matchMedia('(max-width: 640px)');
+  layout.addEventListener?.('change', () => {
+    currentKey = '';
+    paint();
+  });
+  if (params.get('embed') === '1') {
+    window.addEventListener('load', () => reportEmbedHeight());
+    setTimeout(() => reportEmbedHeight(), 600);
+    setTimeout(() => reportEmbedHeight(), 2000);
+  }
 }
 setInterval(() => { paint(); }, 1000);
 setInterval(() => { pollCloud(); }, 30000);

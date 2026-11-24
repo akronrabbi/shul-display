@@ -179,9 +179,176 @@ body.public-view .bezel {
 html.embed .live-bar { display: none; }
 
 @media (max-width: 640px) {
-  .live-title { font-size: 16px; }
+  .live-title { font-size: 16px; white-space: normal; }
   .live-pills { width: 100%; margin-left: 0; }
   .live-full { margin-left: auto; }
+  body.public-view .live-pill,
+  body.public-view .live-full {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  body.public-view {
+    display: block;
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body.public-view .bezel {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 12px;
+  }
+
+  html.embed body.public-view .bezel { padding: 10px; }
+
+  body.public-view .frame {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  body.public-view .stage,
+  body.public-view .stage-layer {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transform: none;
+    opacity: 1;
+  }
+
+  body.public-view .widget {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible;
+    container-type: normal;
+  }
+
+  body.public-view .widget-body,
+  body.public-view .plaque,
+  body.public-view .welcome,
+  body.public-view .welcome-still,
+  body.public-view .logo-card,
+  body.public-view .pdf-view,
+  body.public-view .photos,
+  body.public-view .grow,
+  body.public-view .text-fit {
+    height: auto;
+  }
+
+  body.public-view .plaque,
+  body.public-view .logo-card { padding: 14px 16px; }
+  body.public-view .welcome,
+  body.public-view .welcome-still {
+    min-height: 44px;
+    padding: 8px 4px;
+    box-sizing: border-box;
+  }
+
+  body.public-view .clock { font-size: calc(28px * var(--t-scale, 1)); }
+  body.public-view .weekday,
+  body.public-view .text-title,
+  body.public-view .time-value,
+  body.public-view .event-day,
+  body.public-view .logo-name,
+  body.public-view .welcome-line,
+  body.public-view .welcome-chunk,
+  body.public-view .title-fit,
+  body.public-view .takeover-sub { font-size: calc(22px * var(--t-scale, 1)); }
+  body.public-view .date-he,
+  body.public-view .parsha-he,
+  body.public-view .parsha-en,
+  body.public-view .shabbos-card .parsha-en { font-size: calc(18px * var(--t-scale, 1)); }
+  body.public-view .civil,
+  body.public-view .translit,
+  body.public-view .text-body,
+  body.public-view .event-title,
+  body.public-view .event-meta,
+  body.public-view .time-when,
+  body.public-view .zman-time,
+  body.public-view .takeover-details { font-size: calc(16px * var(--t-scale, 1)); }
+  body.public-view .eyebrow,
+  body.public-view .time-label,
+  body.public-view .event-dow,
+  body.public-view .event-month,
+  body.public-view .zman-label,
+  body.public-view .zman-note,
+  body.public-view .logo-sub,
+  body.public-view .takeover-foot,
+  body.public-view .caption { font-size: calc(12px * var(--t-scale, 1)); }
+
+  body.public-view .welcome-track {
+    animation: none;
+    width: 100%;
+    transform: none;
+  }
+  body.public-view .welcome-chunk {
+    white-space: normal;
+    min-width: 0;
+    width: 100%;
+  }
+
+  body.public-view .logo-img {
+    width: auto;
+    height: auto;
+    max-width: 168px;
+    max-height: 96px;
+    flex: none;
+  }
+
+  body.public-view .photos {
+    overflow: visible;
+    background: transparent;
+  }
+  body.public-view .photos .photo {
+    position: relative !important;
+    inset: auto !important;
+    display: none;
+    width: 100% !important;
+    height: auto !important;
+    object-fit: contain !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  body.public-view .photos .photo.on {
+    display: block;
+    opacity: 1 !important;
+  }
+
+  body.public-view .pdf-view canvas {
+    width: 100% !important;
+    height: auto !important;
+    max-height: none;
+  }
+
+  body.public-view .takeover-slot {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+  }
+  body.public-view .takeover {
+    position: relative;
+    min-height: 0;
+    height: auto;
+    padding: 28px 16px;
+  }
+  body.public-view .title-box { height: auto; }
+  body.public-view .takeover-copy { width: 100%; }
 }
 
 .boot-error {
