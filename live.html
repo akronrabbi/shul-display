@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anshe Sfard - Live Board</title>
+  <link rel="stylesheet" href="./vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="./css/theme.css">
+  <link rel="stylesheet" href="./css/widgets.css">
+  <link rel="stylesheet" href="./css/display.css">
+  <style>html,body{background:#101a2c}</style>
+  <script>
+    if (new URLSearchParams(location.search).get('embed') === '1') {
+      document.documentElement.classList.add('embed');
+    }
+  </script>
+</head>
+<body class="public-view" data-public="1">
+  <header class="live-bar" id="live-bar">
+    <div class="live-brand">
+      <span class="live-dot" aria-hidden="true"></span>
+      <h1 class="live-title">Anshe Sfard - Live Board</h1>
+    </div>
+    <div class="live-pills" id="tv-switch" role="group" aria-label="Which board" hidden></div>
+    <button type="button" class="live-full" id="live-full">Full screen</button>
+  </header>
+  <div class="bezel">
+    <h1 class="sr-only" style="position:absolute;left:-9999px">Anshe Sfard live board</h1>
+    <div class="frame" id="frame">
+      <div class="stage" id="stage"></div>
+      <div class="takeover-slot" id="takeover" hidden></div>
+    </div>
+  </div>
+  <script src="./vendor/hebcal/hebcal-core.min.js"></script>
+  <script type="module" src="./js/display.js"></script>
+</body>
+</html>

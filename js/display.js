@@ -28,6 +28,7 @@ let disposers = [];
 
 const params = new URLSearchParams(location.search);
 const forcedSource = params.get('source');
+const publicMode = document.body.dataset.public === '1';
 
 function board() {
   return pickTv(config, params.get('tv'));
@@ -39,6 +40,9 @@ function rotationOf(tv) {
     const query = Number(raw);
     if (query === 0 || query === 90 || query === 180 || query === 270) return query;
   }
+  // A public link is for phones and computers. The sideways turn is only for
+  // the physical screen, unless the link itself asks for a turn.
+  if (publicMode) return 0;
   const saved = Number(tv?.rotation);
   return saved === 90 || saved === 180 || saved === 270 ? saved : 0;
 }
@@ -222,6 +226,7 @@ async function paint() {
   }
   stage.querySelectorAll('.boot-error').forEach((node) => node.remove());
   swapLayer(next, nextDisposers, current.transition || 'fade');
+  paintSwitcher();
   window.__ready = true;
 }
 
@@ -245,12 +250,64 @@ function applyRaw(raw) {
 }
 
 function cloudOn() {
+  if (publicMode) return true;
   if (forcedSource === 'local' || forcedSource === 'published') return false;
   if (source === 'local' || source === 'published') return false;
   return true;
 }
 
+function paintSwitcher() {
+  const host = document.getElementById('tv-switch');
+  if (!host || !publicMode || !config) return;
+  const tvs = config.tvs || [];
+  const current = board();
+  host.hidden = tvs.length < 2;
+  const signature = `${tvs.map((tv) => `${tv.id}:${tv.name || ''}`).join('|')}>${current?.id || ''}`;
+  if (host.dataset.sig === signature) return;
+  host.dataset.sig = signature;
+  host.replaceChildren();
+  tvs.forEach((tv) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `live-pill${tv.id === current?.id ? ' on' : ''}`;
+    button.textContent = tv.name || tv.id;
+    button.setAttribute('aria-pressed', tv.id === current?.id ? 'true' : 'false');
+    button.addEventListener('click', () => {
+      params.set('tv', tv.id);
+      const url = new URL(location.href);
+      url.searchParams.set('tv', tv.id);
+      history.replaceState(null, '', url);
+      currentKey = '';
+      paint();
+    });
+    host.append(button);
+  });
+}
+
+async function loadPublic() {
+  if (!calendar) return;
+  try {
+    const pass = await anonymousToken();
+    const row = await readBoard(pass);
+    if (row) cloudStamp = row.updated_at || '';
+    if (boardHasLayout(row?.config)) {
+      await applyRaw(row.config);
+      paintSwitcher();
+      return;
+    }
+  } catch {
+    // The public page waits for the live board. It does not use a local draft.
+  }
+  if (!config) {
+    stage.innerHTML = '<div class="boot-error">The live board could not be read. Check the connection and try again.</div>';
+  }
+}
+
 async function load() {
+  if (publicMode) {
+    await loadPublic();
+    return;
+  }
   if (!calendar) return;
   const local = storage.loadLocal();
   if (!cloudOn()) {
@@ -297,14 +354,16 @@ async function pollCloud() {
     const row = await readBoard(token);
     cloudStamp = row?.updated_at || stamp.updated_at;
     if (!boardHasLayout(row?.config)) return;
-    storage.saveLocal(row.config);
+    if (!publicMode) storage.saveLocal(row.config);
     await applyRaw(row.config);
+    paintSwitcher();
   } catch {
     // Keep the picture that is already on screen.
   }
 }
 
 storage.subscribe((message) => {
+  if (publicMode) return;
   if (message.type === 'source' && !forcedSource) {
     source = message.source;
     load();
@@ -323,13 +382,26 @@ function showCursor() {
   clearTimeout(cursorTimer);
   cursorTimer = setTimeout(() => document.body.classList.remove('show-cursor'), 2500);
 }
-document.addEventListener('mousemove', showCursor);
-showCursor();
+if (!publicMode) {
+  document.addEventListener('mousemove', showCursor);
+  showCursor();
+}
 
-document.getElementById('fullscreen').addEventListener('click', () => {
+document.getElementById('fullscreen')?.addEventListener('click', () => {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
   else document.exitFullscreen();
 });
+
+const liveFull = document.getElementById('live-full');
+if (liveFull) {
+  if (typeof document.documentElement.requestFullscreen !== 'function') liveFull.hidden = true;
+  else {
+    liveFull.addEventListener('click', () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+      else document.exitFullscreen();
+    });
+  }
+}
 
 let currentScreenName = '';
 const startedAt = new Date();
@@ -364,9 +436,15 @@ function nightlyRefresh() {
 }
 
 window.addEventListener('resize', () => fitFrame());
-setInterval(heartbeat, 60000);
-setTimeout(heartbeat, 8000);
-setInterval(nightlyRefresh, 60000);
+if (frame?.parentElement && 'ResizeObserver' in window) {
+  const watcher = new ResizeObserver(() => fitFrame());
+  watcher.observe(frame.parentElement);
+}
+if (!publicMode) {
+  setInterval(heartbeat, 60000);
+  setTimeout(heartbeat, 8000);
+  setInterval(nightlyRefresh, 60000);
+}
 setInterval(() => { paint(); }, 1000);
 setInterval(() => { pollCloud(); }, 30000);
 

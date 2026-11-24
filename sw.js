@@ -1,7 +1,8 @@
-const CACHE = 'shul-display-v9';
+const CACHE = 'shul-display-v10';
 const FILES = [
   './',
   './index.html',
+  './live.html',
   './editor.html',
   './config.json',
   './css/theme.css',
