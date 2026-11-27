@@ -1,5 +1,5 @@
 // Copy Neon pictures the live board still points at into media/, named by
-// their contents, and write promoted-board.json with those site addresses.
+// their contents, and write promoted-board.json with the site address of each.
 //
 //   node scripts/mirror-media.mjs
 //
@@ -58,7 +58,7 @@ for (const url of urls) {
   const hash = createHash('sha256').update(buf).digest('hex').slice(0, 16);
   const name = `${hash}.${extension(url, response.headers.get('content-type'))}`;
   await writeFile(join(mediaDir, name), buf);
-  text = text.split(url).join(`media/${name}`);
+  text = text.split(url).join(`https://akronrabbi.github.io/shul-display/media/${name}`);
   bytes += buf.length;
   console.log(`${name}  ${buf.length}  ${url.split('/').pop()}`);
 }
