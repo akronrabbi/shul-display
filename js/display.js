@@ -1,4 +1,4 @@
-import { anonymousToken, boardHasLayout, pingTv, readBoard } from './cloud.js';
+import { anonymousToken, boardHasLayout, pingTv, readBoard, readWatch } from './cloud.js';
 import { applyTheme } from './themes.js';
 import { createCalendar, zoneParts } from './calendar.js';
 import { inDateRange } from './events.js';
@@ -306,13 +306,71 @@ function paintSwitcher() {
   });
 }
 
+const SHOWN_KEY = 'shul-display-shown-v1';
+const REFRESH_KEY = 'shul-display-refresh-at';
+const FAST_MS = 6000;
+const IDLE_MS = 45 * 60 * 1000;
+const EDIT_FRESH_MS = 2 * 60 * 1000;
+
+function rememberShown(raw) {
+  try { localStorage.setItem(SHOWN_KEY, JSON.stringify(raw)); } catch { /* ignore */ }
+}
+
+function recallShown() {
+  try {
+    const raw = localStorage.getItem(SHOWN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function notedRefresh() {
+  try { return sessionStorage.getItem(REFRESH_KEY) || ''; } catch { return ''; }
+}
+
+function noteRefresh(value) {
+  try { sessionStorage.setItem(REFRESH_KEY, value || ''); } catch { /* ignore */ }
+}
+
+function quietNow(now = new Date()) {
+  if (!calendar?.networkQuiet) return { active: false, start: null, end: null };
+  return calendar.networkQuiet(now);
+}
+
+async function loadQuiet() {
+  const remembered = recallShown() || storage.loadLocal();
+  if (boardHasLayout(remembered)) {
+    await applyRaw(remembered);
+    if (publicMode) paintSwitcher();
+    return;
+  }
+  if ('caches' in window) {
+    try {
+      const cached = await caches.match('./config.json');
+      if (cached) {
+        await applyRaw(await cached.json());
+        if (publicMode) paintSwitcher();
+      }
+    } catch { /* keep the last picture, or the empty note below */ }
+  }
+  if (!config) {
+    stage.innerHTML = '<div class="boot-error">This screen is keeping Shabbos quiet and has no saved layout yet.</div>';
+  }
+}
+
 async function loadPublic() {
   if (!calendar) return;
+  if (quietNow().active) {
+    await loadQuiet();
+    return;
+  }
   try {
     const pass = await anonymousToken();
     const row = await readBoard(pass);
     if (row) cloudStamp = row.updated_at || '';
     if (boardHasLayout(row?.config)) {
+      rememberShown(row.config);
       await applyRaw(row.config);
       paintSwitcher();
       return;
@@ -331,6 +389,10 @@ async function load() {
     return;
   }
   if (!calendar) return;
+  if (quietNow().active) {
+    await loadQuiet();
+    return;
+  }
   const local = storage.loadLocal();
   if (!cloudOn()) {
     if ((forcedSource === 'local' || source === 'local') && local) {
@@ -351,6 +413,7 @@ async function load() {
     if (row) cloudStamp = row.updated_at || '';
     if (boardHasLayout(row?.config)) {
       storage.saveLocal(row.config);
+      rememberShown(row.config);
       await applyRaw(row.config);
       return;
     }
@@ -377,6 +440,7 @@ async function pollCloud() {
     cloudStamp = row?.updated_at || stamp.updated_at;
     if (!boardHasLayout(row?.config)) return;
     if (!publicMode) storage.saveLocal(row.config);
+    rememberShown(row.config);
     await applyRaw(row.config);
     paintSwitcher();
   } catch {
@@ -450,6 +514,7 @@ async function heartbeat() {
 // this is safe even if the network is down at that moment.
 function nightlyRefresh() {
   if (params.get('noreload') === '1') return;
+  if (quietNow().active) return;
   const uptime = Date.now() - startedAt.getTime();
   const akron = zoneParts(new Date());
   if (akron.hour === 3 && akron.minute < 15 && uptime > 2 * 60 * 60 * 1000) {
@@ -462,11 +527,87 @@ if (frame?.parentElement && 'ResizeObserver' in window) {
   const watcher = new ResizeObserver(() => fitFrame());
   watcher.observe(frame.parentElement);
 }
-if (!publicMode) {
-  setInterval(heartbeat, 60000);
-  setTimeout(heartbeat, 8000);
-  setInterval(nightlyRefresh, 60000);
+let watchTimer = 0;
+let watchBusy = false;
+let watchPrimed = false;
+
+function editingFresh(stamp) {
+  const time = Date.parse(stamp || '');
+  return Number.isFinite(time) && Date.now() - time < EDIT_FRESH_MS;
 }
+
+function sameStamp(a, b) {
+  const left = Date.parse(a || '');
+  const right = Date.parse(b || '');
+  if (Number.isFinite(left) && Number.isFinite(right)) return left === right;
+  return (a || '') === (b || '');
+}
+
+function scheduleWatch(delay) {
+  clearTimeout(watchTimer);
+  watchTimer = setTimeout(() => {
+    watchTimer = 0;
+    checkWatch();
+  }, delay);
+}
+
+async function checkWatch() {
+  if (!calendar || !cloudOn() || watchBusy) return;
+  watchBusy = true;
+  let delay = IDLE_MS;
+  try {
+    const quiet = quietNow();
+    if (quiet.active && quiet.end) {
+      delay = Math.max(1000, quiet.end.getTime() - Date.now() + 2000);
+      return;
+    }
+    const token = await anonymousToken();
+    const watch = await readWatch(token);
+    if (!watch) {
+      await pollCloud();
+      return;
+    }
+    const refresh = watch.refresh_at || '';
+    if (!watchPrimed) {
+      watchPrimed = true;
+      noteRefresh(refresh);
+    } else if (refresh !== notedRefresh()) {
+      noteRefresh(refresh);
+      location.reload();
+      return;
+    }
+    const fast = editingFresh(watch.editing_at);
+    delay = fast ? FAST_MS : IDLE_MS;
+    if (watch.updated_at && !sameStamp(watch.updated_at, cloudStamp)) {
+      const row = await readBoard(token);
+      cloudStamp = row?.updated_at || watch.updated_at;
+      if (boardHasLayout(row?.config)) {
+        if (!publicMode) storage.saveLocal(row.config);
+        rememberShown(row.config);
+        await applyRaw(row.config);
+        paintSwitcher();
+      }
+    } else if (watch.updated_at) {
+      cloudStamp = watch.updated_at;
+    }
+    if (!publicMode && !fast) await heartbeat();
+  } catch {
+    delay = IDLE_MS;
+  } finally {
+    watchBusy = false;
+    const upcoming = quietNow();
+    if (!upcoming.active && upcoming.start) {
+      const until = upcoming.start.getTime() - Date.now();
+      if (until > 0 && until < delay) delay = until;
+    }
+    scheduleWatch(delay);
+  }
+}
+
+if (!publicMode) setInterval(nightlyRefresh, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !watchTimer) checkWatch();
+});
 if (publicMode) {
   const layout = window.matchMedia('(max-width: 640px)');
   layout.addEventListener?.('change', () => {
@@ -480,10 +621,8 @@ if (publicMode) {
   }
 }
 setInterval(() => { paint(); }, 1000);
-setInterval(() => { pollCloud(); }, 30000);
+load().finally(() => { checkWatch(); });
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
-
-load();

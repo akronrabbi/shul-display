@@ -1,4 +1,5 @@
-const CACHE = 'shul-display-v11';
+const CACHE = 'shul-display-v12';
+const MEDIA_HOST = 'br-winter-morning-beywmp3z.storage.c-9.us-east-2.aws.neon.tech';
 const FILES = [
   './',
   './index.html',
@@ -62,6 +63,11 @@ async function networkFirst(request) {
   }
 }
 
+function isImmutableMedia(url) {
+  if (url.hostname === MEDIA_HOST && url.pathname.includes('/media/')) return true;
+  return url.origin === self.location.origin && /\/media\/[a-f0-9]{16}\.[a-z0-9]+$/i.test(url.pathname);
+}
+
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE);
   const cached = await cache.match(request);
@@ -71,9 +77,24 @@ async function cacheFirst(request) {
   return fresh;
 }
 
+async function cacheFirstForever(request) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const fresh = await fetch(request);
+  if (fresh && (fresh.ok || fresh.type === 'opaque')) {
+    try { await cache.put(request, fresh.clone()); } catch { /* a full disk should not hide the picture */ }
+  }
+  return fresh;
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+  if (isImmutableMedia(url)) {
+    event.respondWith(cacheFirstForever(event.request));
+    return;
+  }
   const sameOrigin = url.origin === self.location.origin;
   const extra = url.hostname === 'cdn.jsdelivr.net'
     || url.hostname === 'fonts.googleapis.com'

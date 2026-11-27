@@ -254,13 +254,37 @@ export function createCalendar(lib) {
     });
   }
 
-  return {
+  // No network from Friday sunset until Saturday nightfall (tzeit, 8.5 degrees)
+// in Akron. This is the sunset itself, not candle lighting.
+function networkQuiet(now = new Date()) {
+  const minute = Math.floor(now.getTime() / 60000);
+  return memo('quiet:' + minute, () => {
+    const weekday = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(now);
+    const index = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[weekday];
+    const today = zoneParts(now, TZ);
+    const noon = new Date(today.year, today.month - 1, today.day, 12, 0, 0);
+    const back = index === 6 ? 1 : (index + 2) % 7;
+    const friday = new Date(noon.getFullYear(), noon.getMonth(), noon.getDate() - back, 12, 0, 0);
+    const saturday = new Date(friday.getFullYear(), friday.getMonth(), friday.getDate() + 1, 12, 0, 0);
+    const start = new lib.Zmanim(location, friday, false).sunset();
+    const end = new lib.Zmanim(location, saturday, false).tzeit(8.5);
+    const time = now.getTime();
+    return {
+      active: time >= start.getTime() && time < end.getTime(),
+      start,
+      end,
+    };
+  });
+}
+
+return {
     formatTime,
     formatLong,
     hebrew,
     shabbos,
     restWindow,
     zmanim,
+    networkQuiet,
     location,
   };
 }

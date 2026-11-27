@@ -548,8 +548,45 @@ export function photoTransition(settings) {
   return settings?.crossfade === false ? 'none' : 'fade';
 }
 
+const heldImages = new Map();
+const heldFiles = new Map();
+
+// One download per address for the life of the page. A new address is a new file.
+function heldImage(url) {
+  const key = String(url || '');
+  if (!key) return Promise.resolve('');
+  if (heldImages.has(key)) return heldImages.get(key);
+  const job = (async () => {
+    if (key.startsWith('blob:') || key.startsWith('data:')) return key;
+    try {
+      const response = await fetch(key, { mode: 'cors', credentials: 'omit', cache: 'force-cache' });
+      if (!response.ok) return key;
+      return URL.createObjectURL(await response.blob());
+    } catch {
+      return key;
+    }
+  })();
+  heldImages.set(key, job);
+  return job;
+}
+
+function heldFile(url) {
+  const key = String(url || '');
+  if (!key) return Promise.resolve(null);
+  if (heldFiles.has(key)) return heldFiles.get(key);
+  const job = fetch(key, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .catch(() => null);
+  heldFiles.set(key, job);
+  return job;
+}
+
 function preload(url) {
-  return new Promise((resolve) => {
+  return heldImage(url).then((local) => new Promise((resolve) => {
+    if (!local) {
+      resolve(false);
+      return;
+    }
     const img = new Image();
     img.referrerPolicy = 'no-referrer';
     let done = false;
@@ -561,8 +598,8 @@ function preload(url) {
     img.onload = () => finish(true);
     img.onerror = () => finish(false);
     setTimeout(() => finish(true), 10000);
-    img.src = url;
-  });
+    img.src = local;
+  }));
 }
 
 function shuffled(list) {
@@ -624,14 +661,18 @@ async function mountPhotos(body, widget, ctx) {
     if (busy || urls.length < 2) return;
     busy = true;
     try {
+      let local = '';
       for (let tries = 0; tries < urls.length; tries += 1) {
         index = (index + 1) % urls.length;
         // Wait for the next picture to arrive, so a fade never shows an empty box.
-        if (await preload(urls[index])) break;
+        if (await preload(urls[index])) {
+          local = await heldImage(urls[index]);
+          break;
+        }
       }
-      if (!alive) return;
+      if (!alive || !local) return;
       const next = front === a ? b : a;
-      next.src = urls[index];
+      if (next.src !== local) next.src = local;
       try { await next.decode(); } catch { /* show it anyway */ }
       if (!alive) return;
       enter(next, front);
@@ -645,11 +686,13 @@ async function mountPhotos(body, widget, ctx) {
     slideTimer = setInterval(step, seconds * 1000);
     bag.push(() => clearInterval(slideTimer));
   };
-  const show = () => {
+  const show = async () => {
     note.hidden = urls.length > 0;
     if (!urls.length) return;
     if (!a.getAttribute('src')) {
-      a.src = urls[0];
+      const local = await heldImage(urls[0]);
+      if (!alive) return;
+      a.src = local || urls[0];
       enter(a, null);
       front = a;
       index = 0;
@@ -698,13 +741,9 @@ async function mountPdf(body, widget, ctx) {
   let buffer = null;
   if (settings.assetId && ctx.assetBuffer) buffer = await ctx.assetBuffer(settings.assetId);
   if (!buffer && settings.url) {
-    try {
-      const response = await fetch(settings.url);
-      if (response.ok) buffer = await response.arrayBuffer();
-    } catch {
-      buffer = null;
-    }
-  }
+  const shared = await heldFile(settings.url);
+  buffer = shared ? shared.slice(0) : null;
+}
   if (!buffer) {
     root.append(h('div', 'empty-note', 'Add a PDF in the editor.'));
     return () => {};

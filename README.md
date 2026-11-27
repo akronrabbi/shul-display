@@ -104,15 +104,19 @@ https://akronrabbi.github.io/shul-display/
 
 ## Storage
 
-**Is the TV on?** Each television checks in about once a minute. The TV bar in the editor then shows "Online, seen 1 min ago" or "Offline, last seen ...". This needs the table in `schema/status.sql`, run once in the Neon SQL editor. Until then the indicator stays hidden and nothing else changes. Each TV also reloads itself quietly once a night, around 3 AM Akron time, so a screen that runs for weeks stays quick. Add `?noreload=1` to the TV address to turn that off.
+**Is the TV on?** A television checks in when it is idle, about every 45 minutes. The TV bar in the editor then shows "Online, seen ..." or "Offline, last seen ...". This needs the table in `schema/status.sql`, run once in the Neon SQL editor. Until then the indicator stays hidden and nothing else changes. Each TV also reloads itself quietly once a night, around 3 AM Akron time, so a screen that runs for weeks stays quick. Add `?noreload=1` to the TV address to turn that off. From Friday sunset until Saturday nightfall in Akron, the screens do not call out at all.
 
 Named layouts and the last 30 online saves live in Neon tables `public.layouts` and `public.board_history`. Only a signed-in editor can read or change them. The television does not use those tables. The SQL is in `schema/archive.sql`.
 
-Save writes every television into one online board. The television reads that board on its own, about every 30 seconds, and changes the picture without reloading. A copy stays in this browser, so the last layout keeps showing if the network drops.
+The small row the screens actually poll is `public.board_watch` (`schema/watch.sql`). Anyone can read it. Only an editor can mark it. While the editor is open and signed in, it updates that row about once a minute, and the screens look every few seconds so a save shows up quickly. When nobody is editing, they look about every 45 minutes, and they download the full layout only when it changed. **Refresh all screens now** (under More) asks every screen to reload on its next look.
+
+Save writes every television into one online board. A copy stays in this browser, so the last layout keeps showing if the network drops.
 
 Sign in before you save. Google is first. An email code is the fallback. Only rabbi@akronshul.com, askmoses93@gmail.com, and mosheakron@gmail.com can change the board. Any other address is told so plainly, and the board is left as it was.
 
-Pictures, logos, and PDF flyers upload into the public media bucket. The layout stores that web address. Older pictures that were saved inside the file still show.
+Pictures, logos, and PDF flyers upload into the public media bucket. The layout stores that web address. Each screen downloads a file once and keeps it. Older pictures that were saved inside the file still show.
+
+Pictures the board already uses also live in `media/`, named by their contents, and the site serves those. A new upload cannot be committed from the browser, so it stays in the bucket until someone promotes it. On a computer with Node, run `node scripts/mirror-media.mjs`. That copies every Neon picture the board still points at into `media/`, writes `promoted-board.json`, and does not change the online board by itself. Commit the new files, push, then in the editor use Import a file on `promoted-board.json` and Save.
 
 **Export** and **Import** still work. Import also tries to save online when you are signed in.
 

@@ -3341,7 +3341,7 @@ async function save() {
         paintCoverWarning();
         return;
       }
-      setStatus(drafts ? `Saved. The TV updates within a minute. ${drafts} draft screen${drafts === 1 ? ' is' : 's are'} kept but not shown.` : 'Saved. The TV updates within a minute.', 'saved');
+      setStatus(drafts ? `Saved. Open screens pick this up within a few seconds while this editor stays open. ${drafts} draft screen${drafts === 1 ? ' is' : 's are'} kept but not shown.` : 'Saved. Open screens pick this up within a few seconds while this editor stays open.', 'saved');
       return;
     }
     status.dataset.state = 'error';
@@ -3457,6 +3457,23 @@ function bindChrome() {
     openArchive('layouts');
   });
   document.getElementById('history').addEventListener('click', () => openArchive('history'));
+  document.getElementById('refresh-screens').addEventListener('click', async () => {
+    setStatus('Asking every screen to reload...', 'busy');
+    const result = await storage.bumpRefresh();
+    if (result?.ok) {
+      setStatus('Screens will reload the next time they check. That is a few seconds while this page stays open.', 'saved');
+      return;
+    }
+    if (result?.reason === 'signed-out') {
+      setStatus('Sign in to refresh the screens.', 'error');
+      return;
+    }
+    if (result?.reason === 'not-editor') {
+      setStatus('That sign-in is not an editor, so the screens were left as they are.', 'error');
+      return;
+    }
+    setStatus('The screens could not be asked to reload.', 'error');
+  });
   document.getElementById('reload-published').addEventListener('click', async () => {
     const published = await storage.loadPublished();
     if (!published) {
@@ -4008,6 +4025,11 @@ async function init() {
   offerUnsaved();
   refreshTvStatus();
   setInterval(refreshTvStatus, 60000);
+  const editingPulse = async () => {
+    try { await storage.touchEditing(); } catch { /* a missed heartbeat only slows the screens */ }
+  };
+  setTimeout(editingPulse, 4000);
+  setInterval(editingPulse, 60000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
   window.__ready = true;
 }

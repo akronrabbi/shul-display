@@ -7,6 +7,7 @@ import {
   listLayouts,
   patchLayout,
   pushHistory,
+  markEditing,
   readBoard,
   readHistory,
   readLayout,
@@ -213,6 +214,8 @@ export function createStorage(options = {}) {
     writeLayout(layout) { return this.withToken().then((auth) => (auth.ok ? writeLayout(auth.token, layout) : auth)); },
     patchLayout(id, patch) { return this.withToken().then((auth) => (auth.ok ? patchLayout(auth.token, id, patch) : auth)); },
     removeLayout(id) { return this.withToken().then((auth) => (auth.ok ? removeLayout(auth.token, id) : auth)); },
+    touchEditing() { return this.withToken().then((auth) => (auth.ok ? markEditing(auth.token) : auth)); },
+    bumpRefresh() { return this.withToken().then((auth) => (auth.ok ? markEditing(auth.token, { refresh: true }) : auth)); },
     listHistory() { return this.withToken().then((auth) => (auth.ok ? listHistory(auth.token) : auth)); },
     readHistory(id) { return this.withToken().then((auth) => (auth.ok ? readHistory(auth.token, id) : auth)); },
     async upload(file) {

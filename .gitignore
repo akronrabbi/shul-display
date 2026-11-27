@@ -1,3 +1,4 @@
 .DS_Store
 *.log
 albums/*.json
+promoted-board.json

@@ -37,6 +37,30 @@ export async function anonymousToken() {
   return anonToken;
 }
 
+// The screens poll this one small row. updated_at follows the board.
+// editing_at and refresh_at are written only by a signed-in editor.
+export async function readWatch(token) {
+  const response = await fetch(
+    `${DATA_API}/board_watch?id=eq.${encodeURIComponent(BOARD_ID)}&select=updated_at,editing_at,refresh_at`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) return null;
+  const rows = await response.json().catch(() => []);
+  return Array.isArray(rows) ? (rows[0] || null) : null;
+}
+
+export async function markEditing(token, { refresh = false } = {}) {
+  const stamp = new Date().toISOString();
+  const body = { editing_at: stamp };
+  if (refresh) body.refresh_at = stamp;
+  const response = await fetch(`${DATA_API}/board_watch?id=eq.${encodeURIComponent(BOARD_ID)}`, {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify(body),
+  });
+  return dataResult(response);
+}
+
 export async function readBoard(token, { stampOnly = false } = {}) {
   const select = stampOnly ? 'updated_at' : 'config,updated_at';
   const response = await fetch(
@@ -178,9 +202,10 @@ export async function uploadMedia(token, file) {
   return { url: body.publicUrl, key: body.key };
 }
 
-// Each television reports in about once a minute so the editor can say when it
-// was last seen. The table is in schema/status.sql. If it is not set up yet,
-// these calls fail quietly and the board keeps working.
+// A television reports in when it is idle, about every 45 minutes, so the
+// editor can say when it was last seen. The table is in schema/status.sql.
+// The live page does not report in. If the table is not set up yet, the call
+// fails quietly and the board keeps working.
 export async function pingTv(token, tvId, info) {
   const response = await fetch(`${DATA_API}/rpc/tv_ping`, {
     method: 'POST',
