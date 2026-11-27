@@ -39,24 +39,33 @@ export async function anonymousToken() {
 
 // The screens poll this one small row. updated_at follows the board.
 // editing_at and refresh_at are written only by a signed-in editor.
+// The screens read boards id "watch", a tiny row, instead of a new table.
+// The Data API sometimes keeps serving a schema cache that does not see a
+// table added later. This row uses the boards table the screens already read.
 export async function readWatch(token) {
   const response = await fetch(
-    `${DATA_API}/board_watch?id=eq.${encodeURIComponent(BOARD_ID)}&select=updated_at,editing_at,refresh_at`,
+    `${DATA_API}/boards?id=eq.watch&select=config`,
     { headers: { Authorization: `Bearer ${token}` } },
   );
   if (!response.ok) return null;
   const rows = await response.json().catch(() => []);
-  return Array.isArray(rows) ? (rows[0] || null) : null;
+  const config = Array.isArray(rows) ? rows[0]?.config : null;
+  if (!config || typeof config !== 'object') return null;
+  return {
+    updated_at: config.board_updated_at || '',
+    editing_at: config.editing_at || null,
+    refresh_at: config.refresh_at || null,
+  };
 }
 
 export async function markEditing(token, { refresh = false } = {}) {
   const stamp = new Date().toISOString();
-  const body = { editing_at: stamp };
-  if (refresh) body.refresh_at = stamp;
-  const response = await fetch(`${DATA_API}/board_watch?id=eq.${encodeURIComponent(BOARD_ID)}`, {
+  const config = { editing_at: stamp };
+  if (refresh) config.refresh_at = stamp;
+  const response = await fetch(`${DATA_API}/boards?id=eq.watch`, {
     method: 'PATCH',
     headers: authHeaders(token),
-    body: JSON.stringify(body),
+    body: JSON.stringify({ config }),
   });
   return dataResult(response);
 }

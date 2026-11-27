@@ -1,3 +1,4 @@
+import { siteMediaUrl } from './images.js';
 import { normalizeTheme } from './themes.js';
 import { defaultSettings, defaultTakeover } from './widgets.js';
 
@@ -140,7 +141,7 @@ export function normalizeConfig(config) {
   }
   const seen = new Set();
   const library = [...(Array.isArray(raw.library) ? raw.library : []), ...used]
-    .filter((item) => item && /^https?:\/\//i.test(String(item.url || '')) && !seen.has(item.url) && seen.add(item.url))
+    .filter((item) => item && (/^https?:\/\//i.test(String(item.url || '')) || siteMediaUrl(item.url)) && !seen.has(item.url) && seen.add(item.url))
     .slice(-1000)
     .map((item) => ({ url: String(item.url), name: String(item.name || '').slice(0, 120), from: item.from === 'google-photos' ? 'google-photos' : 'upload', at: String(item.at || '') }));
   return { version: 2, activeTv, tvs, google, library };

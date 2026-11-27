@@ -5,10 +5,15 @@
 
 const PHOTOS_ALBUM = /photos\.app\.goo\.gl|photos\.google\.com\/(?:share|album|u\/\d+\/album)/i;
 
+export function siteMediaUrl(value) {
+  return /^(?:\.\/)?media\/[a-f0-9]{16}\.[a-z0-9]+$/i.test(String(value || '').trim());
+}
+
 export function safeImageUrl(value) {
   if (!value) return '';
   const url = String(value).trim();
   if (url.startsWith('assets/') || url.startsWith('./assets/')) return url;
+  if (siteMediaUrl(url)) return url;
   if (/^https?:\/\//i.test(url)) return url;
   if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(url)) return url;
   return '';
